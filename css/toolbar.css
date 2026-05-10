@@ -1,0 +1,149 @@
+/* ============================================================
+   TAC Viewer — Toolbar
+   ============================================================ */
+
+#toolbar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 8px;
+    background: var(--toolbar-bg);
+    border-bottom: 1px solid var(--border);
+    height: var(--toolbar-height);
+    overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+    user-select: none;
+}
+#toolbar::-webkit-scrollbar { display: none; }
+
+.toolbar-section { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+/* Marca */
+.toolbar-brand { gap: 8px; padding-right: 8px; border-right: 1px solid var(--border); }
+.brand-logo { font-size: 22px; color: var(--brand-accent); line-height: 1; }
+.brand-name { font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+
+/* Separador vertical */
+.tool-separator {
+    width: 1px; height: 24px;
+    background: var(--border-strong);
+    margin: 0 2px; flex-shrink: 0;
+}
+
+/* ── Tool groups ─────────────────────────────────────────── */
+.tool-groups { gap: 4px; }
+.tool-group { display: flex; align-items: center; gap: 2px; }
+
+/* ── Tool button ─────────────────────────────────────────── */
+.tool-btn {
+    width: var(--tool-btn-size); height: var(--tool-btn-size);
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    background: transparent;
+    transition: all var(--fast);
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.tool-btn svg { width: 16px; height: 16px; }
+.tool-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+.tool-btn.active {
+    background: rgba(120,218,171,0.15);
+    color: var(--brand-accent);
+    box-shadow: 0 0 0 1px rgba(120,218,171,0.3);
+}
+.tool-btn:active { transform: scale(0.94); }
+
+/* Toggle buttons (invert, etc.) */
+.toggle-btn.on {
+    background: rgba(120,218,171,0.2);
+    color: var(--brand-accent);
+}
+
+/* Abrir archivos */
+.btn-open {
+    width: auto; padding: 0 12px; gap: 6px;
+    font-size: 12px; font-weight: 600;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+}
+.btn-open svg { width: 14px; height: 14px; }
+.btn-open:hover { background: var(--bg-tertiary); border-color: var(--brand-accent); }
+
+/* ── Windowing presets bar ───────────────────────────────── */
+.presets-bar { gap: 4px; padding: 0 4px; }
+.presets-label { font-size: 10px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; letter-spacing: 0.06em; }
+
+.preset-btn {
+    height: 26px; padding: 0 10px;
+    border-radius: 99px;
+    font-size: 11px; font-weight: 600;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    transition: all var(--fast); white-space: nowrap;
+}
+.preset-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+.preset-btn.active {
+    background: rgba(120,218,171,0.15);
+    color: var(--brand-accent);
+    border-color: rgba(120,218,171,0.4);
+}
+
+/* ── Layout + color map ──────────────────────────────────── */
+.toolbar-right { margin-left: auto; gap: 4px; }
+
+.color-map-group,
+.layout-group,
+.export-group { display: flex; align-items: center; gap: 2px; }
+
+.layout-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    background: transparent;
+    transition: all var(--fast);
+}
+.layout-btn svg { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+.layout-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+.layout-btn.active {
+    background: rgba(120,218,171,0.15);
+    color: var(--brand-accent);
+}
+
+/* ── Botón SR — badge experimental ──────────────────────── */
+.btn-superres {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    position: relative;
+}
+.btn-superres::after {
+    content: 'β';
+    position: absolute;
+    top: 2px; right: 2px;
+    font-size: 8px; font-weight: 700;
+    color: var(--warning);
+    line-height: 1; pointer-events: none;
+}
+
+/* ── Loading progress bar ───────────────────────────────── */
+#loadingBar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 2px; background: var(--bg-tertiary);
+    z-index: 200; overflow: hidden;
+}
+#loadingBarFill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand-accent-dark), var(--brand-accent));
+    transition: width 0.1s ease;
+    width: 0%;
+}

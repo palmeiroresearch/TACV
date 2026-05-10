@@ -1,0 +1,197 @@
+/* ============================================================
+   TAC Viewer — Design System
+   Dark mode primario. Variables → modo claro como excepción.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Reset ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+input, select { font-family: inherit; }
+svg { display: block; pointer-events: none; }
+
+/* ── Variables — dark mode (principal) ──────────────────── */
+:root {
+    /* Marca */
+    --brand-primary:       #1e3872;
+    --brand-accent:        #78daab;
+    --brand-accent-dark:   #5bc492;
+
+    /* Semánticos */
+    --success:  #10b981;
+    --danger:   #ef4444;
+    --warning:  #f59e0b;
+    --info:     #3b82f6;
+
+    /* Fondos dark */
+    --bg-body:       #060a12;
+    --bg-app:        #0b1120;
+    --bg-card:       #111827;
+    --bg-secondary:  #1e293b;
+    --bg-tertiary:   #334155;
+    --input-bg:      #1e293b;
+
+    /* Texto dark */
+    --text-primary:   #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-tertiary:  #64748b;
+
+    /* Bordes dark */
+    --border:         #1e293b;
+    --border-strong:  #334155;
+
+    /* Sombras dark */
+    --shadow-sm:  0 1px 3px rgba(0,0,0,0.5);
+    --shadow-md:  0 4px 12px rgba(0,0,0,0.5);
+    --shadow-lg:  0 10px 30px rgba(0,0,0,0.6);
+
+    /* Radios */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    /* Transiciones */
+    --fast:   150ms cubic-bezier(0.4,0,0.2,1);
+    --normal: 250ms cubic-bezier(0.4,0,0.2,1);
+
+    /* CT Viewer específico */
+    --viewport-bg:        #000000;
+    --overlay-text:       rgba(255,255,255,0.88);
+    --overlay-shadow:     1px 1px 3px rgba(0,0,0,0.95);
+    --measure-color:      #FFD700;
+    --measure-active:     #FF6B35;
+    --roi-fill:           rgba(0,180,255,0.12);
+    --thumb-active-border:#78daab;
+    --toolbar-bg:         #0d1526;
+    --toolbar-height:     52px;
+    --sidebar-width:      88px;
+    --meta-width:         272px;
+    --statusbar-height:   26px;
+    --tool-btn-size:      34px;
+}
+
+/* ── Tipografía base ─────────────────────────────────────── */
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background: var(--bg-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Utilidades ─────────────────────────────────────────── */
+.hidden { display: none !important; }
+
+/* ── Animaciones globales ───────────────────────────────── */
+@keyframes fadeIn    { from { opacity: 0; }                       to { opacity: 1; } }
+@keyframes fadeOut   { from { opacity: 1; }                       to { opacity: 0; } }
+@keyframes scaleIn   { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes slideDown { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideUp   { from { transform: translateY(8px);  opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes spin      { to { transform: rotate(360deg); } }
+@keyframes pulse     { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ── Drop zone ──────────────────────────────────────────── */
+#dropZone {
+    position: fixed; inset: 0; z-index: 9000;
+    background: rgba(6,10,18,0.85);
+    backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.15s ease;
+}
+#dropZoneInner {
+    border: 2px dashed var(--brand-accent);
+    border-radius: var(--radius-lg);
+    padding: 60px 80px;
+    text-align: center;
+    animation: scaleIn 0.2s ease;
+}
+.drop-icon   { font-size: 48px; margin-bottom: 16px; }
+.drop-title  { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+.drop-sub    { font-size: 13px; color: var(--text-secondary); }
+
+/* ── Botones genéricos ──────────────────────────────────── */
+.btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600;
+    transition: all var(--fast);
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary {
+    background: var(--brand-accent); color: #0b1120;
+}
+.btn-primary:hover { background: var(--brand-accent-dark); }
+
+/* ── Toast ──────────────────────────────────────────────── */
+#toastContainer {
+    position: fixed; bottom: 36px; right: 16px;
+    z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; border-radius: var(--radius-md);
+    background: var(--bg-card); border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-lg); font-size: 13px; font-weight: 500;
+    animation: slideUp 0.25s ease;
+    max-width: 320px;
+}
+.toast.success { border-left: 3px solid var(--success); }
+.toast.error   { border-left: 3px solid var(--danger);  }
+.toast.warning { border-left: 3px solid var(--warning); }
+.toast.info    { border-left: 3px solid var(--info);    }
+
+/* ── Probe tooltip ──────────────────────────────────────── */
+#probeTooltip {
+    position: fixed; z-index: 8000; pointer-events: none;
+    background: rgba(0,0,0,0.85); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm); padding: 6px 10px;
+    font-size: 12px; font-weight: 600; color: var(--brand-accent);
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+}
+
+/* ── Welcome screen ─────────────────────────────────────── */
+#welcomeScreen {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--viewport-bg);
+    z-index: 100;
+    animation: fadeIn 0.3s ease;
+}
+.welcome-inner { text-align: center; max-width: 400px; }
+.welcome-icon  { font-size: 56px; margin-bottom: 20px; color: var(--brand-accent); }
+.welcome-title {
+    font-size: 28px; font-weight: 800; margin-bottom: 6px;
+    background: linear-gradient(135deg, var(--brand-accent), #5bc492);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.welcome-sub   { color: var(--text-secondary); margin-bottom: 32px; }
+.btn-welcome-open {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, var(--brand-accent-dark), var(--brand-accent));
+    color: #0b1120; font-size: 15px; font-weight: 700;
+    padding: 14px 28px; border-radius: var(--radius-md);
+    border: none; cursor: pointer;
+    transition: all var(--normal); margin-bottom: 12px;
+    box-shadow: 0 4px 20px rgba(120,218,171,0.3);
+}
+.btn-welcome-open:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(120,218,171,0.4); }
+.welcome-drag { color: var(--text-tertiary); font-size: 12px; margin-bottom: 28px; }
+.welcome-info {
+    display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+    color: var(--text-tertiary); font-size: 11px;
+}
+.welcome-info span {
+    background: var(--bg-secondary); padding: 4px 8px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }

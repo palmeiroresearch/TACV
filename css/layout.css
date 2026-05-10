@@ -1,0 +1,125 @@
+/* ============================================================
+   TAC Viewer — Layout del app shell y viewport grid
+   ============================================================ */
+
+/* ── App shell grid ─────────────────────────────────────── */
+#appShell {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr var(--meta-width);
+    grid-template-rows: var(--toolbar-height) 1fr;
+    grid-template-areas:
+        "toolbar toolbar toolbar"
+        "series  main    meta";
+    height: calc(100vh - var(--statusbar-height));
+    overflow: hidden;
+    background: var(--bg-app);
+}
+
+/* Toolbar ocupa todo el ancho */
+#toolbar      { grid-area: toolbar; }
+#seriesPanel  { grid-area: series; }
+#mainArea     { grid-area: main; position: relative; overflow: hidden; }
+#metadataPanel { grid-area: meta; }
+
+/* Estado colapsado del panel de metadata */
+#metadataPanel.collapsed {
+    width: 32px;
+    min-width: 32px;
+}
+#appShell:has(#metadataPanel.collapsed) {
+    grid-template-columns: var(--sidebar-width) 1fr 32px;
+}
+
+/* ── Viewport grid ──────────────────────────────────────── */
+#viewportGrid {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    gap: 2px;
+    background: #111;
+}
+
+#viewportGrid[data-layout="1x1"] {
+    grid-template: 1fr / 1fr;
+}
+#viewportGrid[data-layout="2x1"] {
+    grid-template: 1fr / 1fr 1fr;
+}
+#viewportGrid[data-layout="2x2"] {
+    grid-template: 1fr 1fr / 1fr 1fr;
+}
+#viewportGrid[data-layout="mpr"] {
+    grid-template: 1fr 1fr / 3fr 2fr;
+}
+#viewportGrid[data-layout="mpr"] .viewport-cell:first-child {
+    grid-row: 1 / 3;
+}
+
+/* ── Viewport cell ──────────────────────────────────────── */
+.viewport-cell {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+    cursor: crosshair;
+    outline: 1.5px solid transparent;
+    transition: outline-color var(--fast);
+}
+.viewport-cell.active {
+    outline-color: var(--brand-accent);
+}
+
+/* El canvas WebGL llena la celda */
+.viewport-cell canvas.gl-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+}
+
+/* Canvas 2D de overlays — encima del WebGL */
+.viewport-cell canvas.overlay-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    pointer-events: none; /* el WebGL canvas maneja eventos */
+}
+
+/* Label de viewport (ej. "Axial", "Coronal") */
+.viewport-label {
+    position: absolute; top: 6px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--overlay-text); text-shadow: var(--overlay-shadow);
+    pointer-events: none;
+    opacity: 0.6;
+    text-transform: uppercase;
+}
+
+/* ── Status bar ──────────────────────────────────────────── */
+#statusBar {
+    height: var(--statusbar-height);
+    background: var(--toolbar-bg);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 12px; gap: 4px;
+    font-size: 11px; color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+}
+#statusBar span { white-space: nowrap; }
+.status-sep { color: var(--border-strong); }
+.status-right-sep { margin-left: auto; }
+.status-right { color: var(--text-tertiary); flex: 1; text-align: right; overflow: hidden; text-overflow: ellipsis; }
+
+/* Cursores por herramienta activa */
+body[data-tool="pan"]          .viewport-cell { cursor: grab; }
+body[data-tool="pan"].dragging .viewport-cell { cursor: grabbing; }
+body[data-tool="zoom"]         .viewport-cell { cursor: zoom-in; }
+body[data-tool="windowing"]    .viewport-cell { cursor: col-resize; }
+body[data-tool="distance"]     .viewport-cell { cursor: crosshair; }
+body[data-tool="angle"]        .viewport-cell { cursor: crosshair; }
+body[data-tool="ellipse"]      .viewport-cell { cursor: crosshair; }
+body[data-tool="rectangle"]    .viewport-cell { cursor: crosshair; }
+body[data-tool="probe"]        .viewport-cell { cursor: cell; }
+body[data-tool="arrow"]        .viewport-cell { cursor: crosshair; }
+body[data-tool="text"]         .viewport-cell { cursor: text; }
+body[data-tool="pointer"]      .viewport-cell { cursor: default; }
