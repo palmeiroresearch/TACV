@@ -87,8 +87,10 @@ const MeasurementsPanel = {
         switch (m.type) {
             case 'distance':  return { val: m.distanceMm?.toFixed(2) ?? '—', unit: 'mm' };
             case 'angle':     return { val: m.angleDeg?.toFixed(1) ?? '—', unit: '°' };
+            case 'cobb':      return { val: m.angleDeg?.toFixed(1) ?? '—', unit: '° Cobb' };
             case 'ellipse':
-            case 'rectangle': return { val: m.stats ? `${m.stats.mean}±${m.stats.std}` : '—', unit: 'HU' };
+            case 'rectangle':
+            case 'freehand':  return { val: m.stats ? `${m.stats.mean}±${m.stats.std}` : '—', unit: 'HU' };
             case 'arrow':     return { val: m.label || '(sin etiqueta)', unit: '' };
             case 'text':      return { val: m.text || '(vacío)', unit: '' };
             default:          return { val: '—', unit: '' };
@@ -96,10 +98,12 @@ const MeasurementsPanel = {
     },
 
     _typeLabel(type) {
-        return { distance: 'Dist', angle: 'Ángulo', ellipse: 'Elipse', rectangle: 'Rect', arrow: 'Flecha', text: 'Texto' }[type] || type;
+        return { distance: 'Dist', angle: 'Ángulo', ellipse: 'Elipse', rectangle: 'Rect',
+                 arrow: 'Flecha', text: 'Texto', cobb: 'Cobb', freehand: 'Libre' }[type] || type;
     },
 
     _typeColor(type) {
-        return { distance: '#FFD700', angle: '#00CFFF', ellipse: '#FF6B35', rectangle: '#7CFC00', arrow: '#FF69B4', text: '#aaa' }[type] || '#888';
+        return { distance: '#FFD700', angle: '#00CFFF', ellipse: '#FF6B35', rectangle: '#7CFC00',
+                 arrow: '#FF69B4', text: '#aaa', cobb: '#00E5FF', freehand: '#7CFC00' }[type] || '#888';
     },
 };

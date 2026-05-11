@@ -8,6 +8,12 @@ const ViewportLayout = {
     _viewports: [],
     _activeId:  0,
     _layout:    '1x1',
+    syncEnabled: false,
+
+    toggleSync() {
+        this.syncEnabled = !this.syncEnabled;
+        document.getElementById('btnSync')?.classList.toggle('on', this.syncEnabled);
+    },
 
     /* ── Inicializar con layout dado ─────────────────── */
     init(layout) {

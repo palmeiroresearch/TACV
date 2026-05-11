@@ -109,7 +109,7 @@ precision highp sampler3D;
 in  vec2 v_texcoord;
 out vec4 fragColor;
 
-uniform sampler3D u_volume;      // R32F: valores raw Int16 como float
+uniform sampler3D u_volume;
 uniform sampler2D u_colormap;
 uniform float u_slope;
 uniform float u_intercept;
@@ -121,23 +121,49 @@ uniform vec3 u_planeOrigin;
 uniform vec3 u_planeRight;
 uniform vec3 u_planeUp;
 
+// Thick MPR / MIP
+uniform int  u_slabN;       // 1 = thin MPR; >1 = thick slab
+uniform int  u_projMode;    // 0=thin/avg, 1=MIP, 2=MinIP, 3=Average
+uniform vec3 u_slabStep;    // step per voxel in texture space (along normal)
+
+float sampleHu(vec3 pos) {
+    if (any(lessThan(pos, vec3(0.0))) || any(greaterThan(pos, vec3(1.0))))
+        return (u_projMode == 2) ? 1.0e6 : -1.0e6;
+    return texture(u_volume, pos).r * u_slope + u_intercept;
+}
+
 void main() {
-    vec3 volCoord = u_planeOrigin
+    vec3 center = u_planeOrigin
         + v_texcoord.x * u_planeRight
         + v_texcoord.y * u_planeUp;
 
-    // Negro fuera del volumen (letterbox borders + fuera del FOV)
-    if (any(lessThan(volCoord, vec3(0.0))) || any(greaterThan(volCoord, vec3(1.0)))) {
-        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
+    if (any(lessThan(center, vec3(0.0))) || any(greaterThan(center, vec3(1.0)))) {
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0); return;
     }
 
-    float raw = texture(u_volume, volCoord).r;
-    float hu  = raw * u_slope + u_intercept;
+    float result;
+    int N = max(u_slabN, 1);
 
-    float gray = clamp((hu - u_wMin) / (u_wMax - u_wMin), 0.0, 1.0);
+    if (N == 1) {
+        result = sampleHu(center);
+    } else {
+        // MIP: 1, MinIP: 2, Average: 3
+        result = (u_projMode == 2) ? 1.0e6 : -1.0e6;
+        if (u_projMode == 3) result = 0.0;
+        float half_n = float(N - 1) * 0.5;
+        for (int i = 0; i < 64; i++) {  // max 64 steps
+            if (i >= N) break;
+            float t  = float(i) - half_n;
+            float hu = sampleHu(center + t * u_slabStep);
+            if      (u_projMode == 1) result = max(result, hu);
+            else if (u_projMode == 2) result = min(result, hu);
+            else                      result += hu;
+        }
+        if (u_projMode == 3) result /= float(N);
+    }
+
+    float gray = clamp((result - u_wMin) / (u_wMax - u_wMin), 0.0, 1.0);
     if (u_invert) gray = 1.0 - gray;
-
     fragColor = texture(u_colormap, vec2(gray, 0.5));
 }`,
 

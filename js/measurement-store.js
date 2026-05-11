@@ -135,6 +135,35 @@ const MeasurementStore = {
         return this._stats(values, null, null, cs, rs, 'rect', w, h);
     },
 
+    computeFreehandStats(pixelData, rows, cols, points, pixelSpacing, slope, intercept) {
+        const [rs, cs] = pixelSpacing || [1, 1];
+        // Bounding box
+        let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+        points.forEach(p => {
+            if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x;
+            if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y;
+        });
+        const values = [];
+        for (let y = Math.max(0, Math.floor(yMin)); y <= Math.min(rows - 1, Math.ceil(yMax)); y++) {
+            for (let x = Math.max(0, Math.floor(xMin)); x <= Math.min(cols - 1, Math.ceil(xMax)); x++) {
+                if (this._pointInPolygon(x + 0.5, y + 0.5, points)) {
+                    values.push(pixelData[y * cols + x] * slope + intercept);
+                }
+            }
+        }
+        const w = (xMax - xMin) * cs, h = (yMax - yMin) * rs;
+        return this._stats(values, null, null, cs, rs, 'rect', w, h);
+    },
+
+    _pointInPolygon(x, y, pts) {
+        let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+        }
+        return inside;
+    },
+
     _stats(values, rx, ry, cs, rs, type, forcedW, forcedH) {
         if (!values.length) return { mean: 0, std: 0, min: 0, max: 0, area: 0, count: 0 };
         const n    = values.length;
@@ -161,14 +190,17 @@ const MeasurementStore = {
     _isNear(m, x, y, r) {
         const near = (p) => p && Math.hypot(p.x - x, p.y - y) <= r;
         switch (m.type) {
-            case 'distance': return near(m.p1) || near(m.p2);
-            case 'angle':    return near(m.p1) || near(m.vertex) || near(m.p2);
-            case 'ellipse':  return Math.abs(x - m.cx) <= m.rx + r && Math.abs(y - m.cy) <= m.ry + r;
-            case 'rectangle':return x >= Math.min(m.x1,m.x2)-r && x <= Math.max(m.x1,m.x2)+r &&
-                                    y >= Math.min(m.y1,m.y2)-r && y <= Math.max(m.y1,m.y2)+r;
-            case 'arrow':    return near(m.tail) || near(m.head);
-            case 'text':     return near(m.pos);
-            default:         return false;
+            case 'distance':  return near(m.p1) || near(m.p2);
+            case 'angle':     return near(m.p1) || near(m.vertex) || near(m.p2);
+            case 'ellipse':   return Math.abs(x - m.cx) <= m.rx + r && Math.abs(y - m.cy) <= m.ry + r;
+            case 'rectangle': return x >= Math.min(m.x1,m.x2)-r && x <= Math.max(m.x1,m.x2)+r &&
+                                     y >= Math.min(m.y1,m.y2)-r && y <= Math.max(m.y1,m.y2)+r;
+            case 'arrow':     return near(m.tail) || near(m.head);
+            case 'text':      return near(m.pos);
+            case 'cobb':      return (m.line1 && (near(m.line1.p1) || near(m.line1.p2))) ||
+                                     (m.line2 && (near(m.line2.p1) || near(m.line2.p2)));
+            case 'freehand':  return m.points?.some(p => Math.hypot(p.x - x, p.y - y) <= r * 2);
+            default:          return false;
         }
     },
 

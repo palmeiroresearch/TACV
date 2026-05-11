@@ -119,3 +119,33 @@
     font-size: 10px; font-weight: 600;
     color: var(--text-tertiary); white-space: nowrap; min-width: 32px;
 }
+
+/* ── Series tab bar (multi-serie) ───────────────────────── */
+.series-tab-bar {
+    display: flex; flex-wrap: wrap; gap: 2px;
+    padding: 4px 4px 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.series-tab-bar.hidden { display: none; }
+.series-tab {
+    display: flex; flex-direction: column; align-items: center;
+    flex: 1; min-width: 40px; max-width: 80px;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    border: 1px solid var(--border); border-bottom: none;
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+    font-size: 10px; cursor: pointer;
+    transition: all var(--fast);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.series-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.series-tab.active {
+    background: var(--brand-accent-dim, rgba(56,189,248,.12));
+    color: var(--brand-accent);
+    border-color: var(--brand-accent);
+    font-weight: 600;
+}
+.series-tab-num { font-size: 12px; font-weight: 700; line-height: 1; }
+.series-tab-name { font-size: 9px; max-width: 70px; overflow: hidden; text-overflow: ellipsis; }

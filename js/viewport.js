@@ -87,6 +87,10 @@ class Viewport {
             activeTool:      null,
             mousePos:        null,
             liveMeasurement: null,
+
+            // A/B Comparator
+            abMode:   false,
+            abSplitX: 0.5,
         };
 
         this._resizeObs = new ResizeObserver(() => this.render());
@@ -107,7 +111,43 @@ class Viewport {
     render() {
         if (!this.renderer) return;
         this.renderer.render(this.state.frame, this.state);
+
+        // A/B mode: render clean (no-filter) version to secondary canvas
+        if (this.state.abMode) {
+            this._ensureAbRenderer();
+            if (this._abRenderer) {
+                const clean = {
+                    ...this.state,
+                    bicubicEnabled: false, usmEnabled: false, bilateralEnabled: false,
+                    anisoEnabled: false, claheEnabled: false, retinexEnabled: false,
+                    isSuperResEnabled: false,
+                };
+                this._abRenderer.render(this.state.frame, clean);
+            }
+        }
+
         OverlayRenderer.render(this);
+        if (typeof HistogramPanel !== 'undefined' && this === ViewportLayout.getActive()) {
+            HistogramPanel.redraw();
+        }
+    }
+
+    _ensureAbRenderer() {
+        const w = this.glCanvas.offsetWidth  || this.glCanvas.width;
+        const h = this.glCanvas.offsetHeight || this.glCanvas.height;
+        if (this._abCanvas && this._abCanvas.width === w && this._abCanvas.height === h) return;
+        try {
+            if (!this._abCanvas) this._abCanvas = document.createElement('canvas');
+            this._abCanvas.width  = w;
+            this._abCanvas.height = h;
+            this._abRenderer = new RendererGL(this._abCanvas);
+        } catch (e) { this._abRenderer = null; }
+    }
+
+    toggleAbMode() {
+        this.state.abMode = !this.state.abMode;
+        document.getElementById('btnAbMode')?.classList.toggle('on', this.state.abMode);
+        this.render();
     }
 
     /* ── Fit to window ─────────────────────────────────── */
@@ -134,6 +174,38 @@ class Viewport {
         document.getElementById('statusZoom').textContent = `Zoom: ${Math.round(newZoom * 100)}%`;
     }
 
+    /* ── Auto W/L desde histograma del slice ────────────── */
+    autoWindow() {
+        const f = this.state.frame;
+        if (!f?.pixelData) return;
+        const slope     = f.rescaleSlope     ?? 1;
+        const intercept = f.rescaleIntercept ?? -1024;
+        const pd = f.pixelData;
+        const n  = pd.length;
+
+        // Histograma rápido (O(n)) en lugar de sort (O(n log n))
+        const BINS = 4096, rawMin = -32768;
+        const hist  = new Uint32Array(BINS);
+        const scale = (BINS - 1) / 65535;
+        for (let i = 0; i < n; i++) hist[Math.round((pd[i] - rawMin) * scale)]++;
+
+        const p005 = n * 0.005, p995 = n * 0.995;
+        let cum = 0, lo = rawMin, hi = 32767;
+        let foundLo = false;
+        for (let b = 0; b < BINS; b++) {
+            cum += hist[b];
+            if (!foundLo && cum >= p005) { lo = rawMin + b / scale; foundLo = true; }
+            if (cum >= p995) { hi = rawMin + b / scale; break; }
+        }
+
+        this.state.windowCenter = ((lo + hi) / 2) * slope + intercept;
+        this.state.windowWidth  = Math.max(1, (hi - lo) * slope);
+        const sel = document.getElementById('presetSelect');
+        if (sel) sel.value = '';    // ningún preset activo tras auto
+        this._updateStatusBar();
+        this.render();
+    }
+
     /* ── Preset de ventana ─────────────────────────────── */
     applyPreset(presetId) {
         const p = WINDOWING_PRESETS[presetId];
@@ -141,6 +213,8 @@ class Viewport {
         this.state.presetId    = presetId;
         this.state.windowWidth  = p.width;
         this.state.windowCenter = p.center;
+        const sel = document.getElementById('presetSelect');
+        if (sel) sel.value = presetId;
         this._updateStatusBar();
         this.render();
     }
@@ -253,6 +327,21 @@ class Viewport {
         gc.addEventListener('wheel',       (e) => ToolState.onWheel(this, e), { passive: false });
         gc.addEventListener('contextmenu', (e) => ToolState.onContextMenu(e));
         gc.addEventListener('mouseenter',  ()  => ToolState.setActiveViewport(this));
+
+        // A/B divider drag
+        let abDragging = false;
+        gc.addEventListener('mousedown', (e) => {
+            if (!this.state.abMode || e.button !== 0) return;
+            const splitX = Math.round((this.state.abSplitX ?? 0.5) * gc.offsetWidth);
+            if (Math.abs(e.offsetX - splitX) < 10) { abDragging = true; e.stopImmediatePropagation(); }
+        }, true);
+        gc.addEventListener('mousemove', (e) => {
+            if (!abDragging) return;
+            this.state.abSplitX = Math.max(0.05, Math.min(0.95, e.offsetX / gc.offsetWidth));
+            OverlayRenderer.render(this);
+            e.stopImmediatePropagation();
+        }, true);
+        window.addEventListener('mouseup', () => { abDragging = false; });
 
         // Touch support básico
         gc.addEventListener('touchstart', (e) => {

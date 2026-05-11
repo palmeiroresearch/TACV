@@ -501,3 +501,33 @@ kbd.shortcut-key {
 }
 .mp-footer-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .mp-footer-btn.danger:hover { background: rgba(239,68,68,.15); color: var(--error); }
+
+/* ── Histogram panel ──────────────────────────────────────── */
+.histogram-panel {
+    position: fixed; z-index: 900;
+    background: var(--bg-app);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    width: 300px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.45);
+    overflow: hidden;
+}
+.hp-header {
+    display: flex; align-items: center; padding: 8px 10px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.hp-title {
+    flex: 1; font-size: 11px; font-weight: 700;
+    color: var(--text-secondary); text-transform: uppercase; letter-spacing: .06em;
+}
+.hist-canvas {
+    width: 100%; height: 160px; display: block;
+    cursor: ew-resize;
+    background: #0a1020;
+}
+.hp-hint {
+    padding: 5px 10px; font-size: 10px;
+    color: var(--text-tertiary); text-align: center;
+    border-top: 1px solid var(--border); flex-shrink: 0;
+}

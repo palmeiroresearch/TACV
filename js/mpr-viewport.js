@@ -9,6 +9,8 @@ class MprViewport extends Viewport {
         this._sliceFraction = 0.5;
         this._cineInterval  = null;
         this._cineDir       = 1;
+        this._mprProjMode   = 0;   // 0=thin, 1=MIP, 2=MinIP, 3=Average
+        this._mprSlabN      = 1;
 
         const labelRow = document.createElement('div');
         labelRow.className = 'viewport-label-row';
@@ -26,6 +28,55 @@ class MprViewport extends Viewport {
             cineBtn.addEventListener('click', (e) => { e.stopPropagation(); this.toggleMprCine(); });
             labelRow.appendChild(cineBtn);
             this._cineBtnEl = cineBtn;
+
+            // Modo MIP selector
+            const modeSelect = document.createElement('select');
+            modeSelect.className = 'mpr-mode-select';
+            modeSelect.title = 'Modo de proyección';
+            [['Thin', 0], ['MIP', 1], ['MinIP', 2], ['Avg', 3]].forEach(([label, val]) => {
+                const opt = document.createElement('option');
+                opt.value = val; opt.textContent = label;
+                modeSelect.appendChild(opt);
+            });
+            modeSelect.addEventListener('change', (e) => {
+                e.stopPropagation();
+                this._mprProjMode = parseInt(e.target.value);
+                this.render();
+            });
+            labelRow.appendChild(modeSelect);
+            this._modeSelectEl = modeSelect;
+
+            // Slab thickness slider (oculto cuando Thin)
+            const slabLabel = document.createElement('span');
+            slabLabel.className = 'mpr-slab-label';
+            slabLabel.textContent = 'Slab: ';
+
+            const slabInput = document.createElement('input');
+            slabInput.type = 'range'; slabInput.min = 1; slabInput.max = 40; slabInput.value = 1;
+            slabInput.className = 'mpr-slab-slider';
+            slabInput.title = 'Grosor del slab (voxels)';
+            slabInput.addEventListener('input', (e) => {
+                e.stopPropagation();
+                this._mprSlabN = parseInt(e.target.value);
+                slabVal.textContent = e.target.value;
+                this.render();
+            });
+            const slabVal = document.createElement('span');
+            slabVal.className = 'mpr-slab-val'; slabVal.textContent = '1';
+
+            const slabRow = document.createElement('div');
+            slabRow.className = 'mpr-slab-row hidden';
+            slabRow.appendChild(slabLabel);
+            slabRow.appendChild(slabInput);
+            slabRow.appendChild(slabVal);
+
+            modeSelect.addEventListener('change', () => {
+                slabRow.classList.toggle('hidden', this._mprProjMode === 0);
+                if (this._mprProjMode === 0) { this._mprSlabN = 1; slabInput.value = 1; slabVal.textContent = '1'; }
+            });
+
+            cell.appendChild(slabRow);
+            this._slabRowEl = slabRow;
         }
 
         cell.appendChild(labelRow);
@@ -53,6 +104,9 @@ class MprViewport extends Viewport {
                 planeOrigin: gl.getUniformLocation(p, 'u_planeOrigin'),
                 planeRight:  gl.getUniformLocation(p, 'u_planeRight'),
                 planeUp:     gl.getUniformLocation(p, 'u_planeUp'),
+                slabN:       gl.getUniformLocation(p, 'u_slabN'),
+                projMode:    gl.getUniformLocation(p, 'u_projMode'),
+                slabStep:    gl.getUniformLocation(p, 'u_slabStep'),
             };
         } catch (e) {
             console.error('MPR shader error:', e);
@@ -153,6 +207,11 @@ class MprViewport extends Viewport {
         gl.uniform3fv(this._mprUniforms.planeRight,  plane.right);
         gl.uniform3fv(this._mprUniforms.planeUp,     plane.up);
 
+        // Thick MPR / MIP
+        gl.uniform1i(this._mprUniforms.slabN,    this._mprSlabN);
+        gl.uniform1i(this._mprUniforms.projMode, this._mprProjMode);
+        gl.uniform3fv(this._mprUniforms.slabStep, this._computeSlabStep());
+
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -250,6 +309,17 @@ class MprViewport extends Viewport {
             case 'coronal':  return MprVolume.getCoronalPlane(f);
             case 'sagital':  return MprVolume.getSagittalPlane(f);
             default:         return MprVolume.getAxialPlane(0);
+        }
+    }
+
+    _computeSlabStep() {
+        const dims = MprVolume.getDims();
+        if (!dims) return new Float32Array([0, 0, 0]);
+        // Normal direction in texture space (1 voxel step)
+        if (this.mprPlane === 'coronal') {
+            return new Float32Array([0, 1 / dims.height, 0]);
+        } else {
+            return new Float32Array([1 / dims.width, 0, 0]);
         }
     }
 }

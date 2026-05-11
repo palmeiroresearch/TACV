@@ -29,6 +29,7 @@ const OverlayRenderer = {
             this.drawCrosshair(viewport);
         }
         this.drawLiveMeasurement(viewport);
+        if (viewport.state.abMode) this.drawAbSplit(viewport);
     },
 
     /* ── Sincronizar tamaño overlay = canvas WebGL ──── */
@@ -209,6 +210,8 @@ const OverlayRenderer = {
             case 'rectangle':  this._drawRect(viewport, m, color);      break;
             case 'arrow':      this._drawArrow(viewport, m, color);     break;
             case 'text':       this._drawText(viewport, m, color);      break;
+            case 'cobb':       this._drawCobb(viewport, m, color);      break;
+            case 'freehand':   this._drawFreehand(viewport, m, color);  break;
         }
     },
 
@@ -336,6 +339,70 @@ const OverlayRenderer = {
         ctx.shadowBlur = 0;
     },
 
+    _drawCobb(viewport, m, color) {
+        const ctx = viewport.overlayCtx;
+        const toC = (p) => viewport.imageToCanvas(p.x, p.y);
+        const COLORS = ['#00E5FF', '#FF6EC7'];  // cyan line1, pink line2
+
+        [m.line1, m.line2].forEach((line, li) => {
+            if (!line?.p1 || !line?.p2) return;
+            const p1 = toC(line.p1), p2 = toC(line.p2);
+            ctx.strokeStyle = COLORS[li]; ctx.lineWidth = 2;
+            ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 2;
+            ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+
+            // Tick marks perpendicular at endpoints
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = -dy / len * 7, ny = dx / len * 7;
+            ctx.lineWidth = 1.5;
+            [[p1], [p2]].forEach(([pt]) => {
+                ctx.beginPath();
+                ctx.moveTo(pt.x - nx, pt.y - ny);
+                ctx.lineTo(pt.x + nx, pt.y + ny);
+                ctx.stroke();
+            });
+        });
+
+        // Angle label between the two lines
+        if (m.line1?.p2 && m.line2?.p1) {
+            const mid1 = toC({ x: (m.line1.p1.x + m.line1.p2.x) / 2, y: (m.line1.p1.y + m.line1.p2.y) / 2 });
+            const mid2 = toC({ x: (m.line2.p1.x + m.line2.p2.x) / 2, y: (m.line2.p1.y + m.line2.p2.y) / 2 });
+            const mx = (mid1.x + mid2.x) / 2, my = (mid1.y + mid2.y) / 2;
+            ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(`Cobb: ${m.angleDeg}°`, mx, my);
+        }
+        ctx.shadowBlur = 0; ctx.textAlign = 'left';
+    },
+
+    _drawFreehand(viewport, m, color) {
+        const ctx = viewport.overlayCtx;
+        if (!m.points?.length) return;
+
+        ctx.strokeStyle = ROI_STROKE_COLOR; ctx.lineWidth = 1.5;
+        ctx.fillStyle   = ROI_FILL_COLOR;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 2;
+
+        ctx.beginPath();
+        m.points.forEach((p, i) => {
+            const c = viewport.imageToCanvas(p.x, p.y);
+            i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y);
+        });
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+
+        if (m.stats) {
+            const first = viewport.imageToCanvas(m.points[0].x, m.points[0].y);
+            ctx.font = '11px Inter, sans-serif'; ctx.fillStyle = '#60c8ff';
+            ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+            ctx.shadowBlur = 2;
+            [`Mean: ${m.stats.mean} HU`, `Std: ${m.stats.std}`, `Area: ${m.stats.area} mm²`]
+                .forEach((line, i) => ctx.fillText(line, first.x + 6, first.y + i * 14));
+        }
+        ctx.shadowBlur = 0;
+    },
+
     _drawEndpointDot(ctx, p, color) {
         ctx.fillStyle = color;
         ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
@@ -345,6 +412,21 @@ const OverlayRenderer = {
     drawLiveMeasurement(viewport) {
         const live = viewport.state.liveMeasurement;
         if (!live) return;
+        if (live.type === 'cobb_partial') {
+            // Dibujar línea 1 completa + línea 2 en curso
+            const ctx = viewport.overlayCtx;
+            const toC = (p) => viewport.imageToCanvas(p.x, p.y);
+            const COLORS = ['#00E5FF', '#FF6EC7'];
+            [live.line1, live.line2].forEach((line, li) => {
+                if (!line?.p1 || !line?.p2) return;
+                const p1 = toC(line.p1), p2 = toC(line.p2);
+                ctx.strokeStyle = COLORS[li]; ctx.lineWidth = 1.5;
+                ctx.setLineDash([5, 3]);
+                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+                ctx.setLineDash([]);
+            });
+            return;
+        }
         this._drawMeasurement(viewport, { ...live, selected: true });
     },
 
@@ -466,5 +548,58 @@ const OverlayRenderer = {
         ctx.moveTo(0, pos.y); ctx.lineTo(cw, pos.y);
         ctx.stroke();
         ctx.setLineDash([]);
+    },
+
+    /* ── A/B split comparator ────────────────────────── */
+    drawAbSplit(viewport) {
+        const ctx     = viewport.overlayCtx;
+        const cw      = viewport.overlayCanvas.width;
+        const ch      = viewport.overlayCanvas.height;
+        const splitX  = Math.round((viewport.state.abSplitX ?? 0.5) * cw);
+
+        // Draw "original" (no-filter) canvas on the left half
+        if (viewport._abCanvas) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, 0, splitX, ch);
+            ctx.clip();
+            ctx.drawImage(viewport._abCanvas, 0, 0, cw, ch);
+            ctx.restore();
+        }
+
+        // Divider line
+        ctx.save();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth   = 2;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur  = 4;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath(); ctx.moveTo(splitX, 0); ctx.lineTo(splitX, ch); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Drag handle at center
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.arc(splitX, ch / 2, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0;
+        ctx.stroke();
+        ctx.fillStyle = '#333'; ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('⇔', splitX, ch / 2);
+
+        // Labels
+        const labelBg = (x, label) => {
+            const m = ctx.measureText(label);
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(x, 6, m.width + 12, 18);
+            ctx.fillStyle = '#fff'; ctx.textBaseline = 'top';
+            ctx.fillText(label, x + 6, 9);
+        };
+        ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.shadowBlur = 0;
+        labelBg(6, 'ORIGINAL');
+        labelBg(splitX + 6, 'FILTROS');
+
+        ctx.restore();
     },
 };

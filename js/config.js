@@ -29,6 +29,8 @@ const TOOL_IDS = {
     RECTANGLE:  'rectangle',
     ARROW:      'arrow',
     TEXT:       'text',
+    COBB:       'cobb',
+    FREEHAND:   'freehand',
 };
 
 /* ── Keyboard shortcuts ─────────────────────────────────── */
@@ -44,6 +46,8 @@ const SHORTCUTS = {
     'r': TOOL_IDS.RECTANGLE,
     'f': TOOL_IDS.ARROW,
     't': TOOL_IDS.TEXT,
+    'c': TOOL_IDS.COBB,
+    'g': TOOL_IDS.FREEHAND,
 };
 
 /* ── DICOM tag dictionary (para metadata panel) ─────────── */

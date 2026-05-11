@@ -71,6 +71,12 @@
                 <button class="tool-btn" data-tool="rectangle" title="ROI Rectángulo (R)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/></svg>
                 </button>
+                <button class="tool-btn" data-tool="freehand" title="ROI Libre — contorno irregular (G)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15 Q6 6 12 8 Q18 10 17 17 Q15 22 9 20 Q3 18 3 15Z"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="cobb" title="Ángulo de Cobb — escoliosis (C)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="8" x2="14" y2="6"/><line x1="10" y1="18" x2="21" y2="14"/><path d="M14 6 Q16 12 10 18" stroke-dasharray="3 2"/></svg>
+                </button>
             </div>
 
             <div class="tool-separator"></div>
@@ -110,6 +116,10 @@
                 <button class="tool-btn toggle-btn" id="btnInvert" title="Invertir imagen (I)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
                 </button>
+                <button class="tool-btn toggle-btn" id="btnAbMode"
+                        title="Comparador A/B — divide la imagen en Original (izquierda) vs Filtros (derecha). Arrastrar el divisor.">
+                    A/B
+                </button>
                 <button class="tool-btn toggle-btn btn-superres" id="btnSuperRes"
                         title="Super-resolución CT-compatible — experimental (PMC10225926)&#10;Preserva la restricción física: promedio de sub-vóxeles = valor original">
                     SR
@@ -120,14 +130,23 @@
             </div>
         </div>
 
-        <!-- Windowing presets -->
-        <div class="toolbar-section presets-bar">
-            <span class="presets-label">Ventana:</span>
-            <button class="preset-btn active" data-preset="brain">Cerebro</button>
-            <button class="preset-btn" data-preset="bone">Hueso</button>
-            <button class="preset-btn" data-preset="softTissue">Tejido blando</button>
-            <button class="preset-btn" data-preset="lung">Pulmón</button>
-            <button class="preset-btn" data-preset="subdural">Subdural</button>
+        <!-- Windowing presets — dropdown compacto -->
+        <div class="toolbar-section">
+            <select id="presetSelect" class="preset-select" title="Preset de ventana (W/L)">
+                <option value="brain">Cerebro — W:80 L:40</option>
+                <option value="bone">Hueso — W:2000 L:400</option>
+                <option value="softTissue">Blando — W:400 L:50</option>
+                <option value="lung">Pulmón — W:1500 L:-600</option>
+                <option value="subdural">Subdural — W:200 L:75</option>
+                <option value="stroke">Stroke — W:40 L:40</option>
+                <option value="temporal">Temporal — W:2800 L:600</option>
+            </select>
+            <button class="tool-btn" id="btnAutoWindow" title="Auto W/L — ajusta ventana automáticamente desde el histograma">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+            <button class="tool-btn" id="btnHistogram" title="Histograma interactivo — arrastrar para ajustar W/L">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="14" width="4" height="7"/><rect x="8" y="9" width="4" height="12"/><rect x="14" y="4" width="4" height="17"/><rect x="20" y="11" width="2" height="10"/></svg>
+            </button>
         </div>
 
         <!-- Layout + color map + file open -->
@@ -139,7 +158,7 @@
                 <button class="tool-btn" data-map="spectrum" title="Espectro">🌈</button>
             </div>
             <div class="tool-separator"></div>
-            <!-- Layout switcher -->
+            <!-- Layout switcher + Sync -->
             <div class="layout-group">
                 <button class="layout-btn active" data-layout="1x1" title="1 viewport">
                     <svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="1"/></svg>
@@ -153,11 +172,15 @@
                 <button class="layout-btn" data-layout="mpr" title="MPR Triplanar">
                     <svg viewBox="0 0 16 16"><rect x="1" y="1" width="9" height="14" rx="1"/><rect x="11" y="1" width="4" height="6" rx="1"/><rect x="11" y="9" width="4" height="6" rx="1"/></svg>
                 </button>
+                <button class="layout-btn toggle-btn" id="btnSync" title="Sincronizar viewports — todos navegan al mismo slice">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8a6 6 0 0 1 10-4.5M14 8a6 6 0 0 1-10 4.5"/><polyline points="11 4 13.5 3.5 14 6"/><polyline points="5 12 2.5 12.5 2 10"/></svg>
+                </button>
             </div>
             <div class="tool-separator"></div>
             <!-- Export -->
             <div class="export-group">
                 <button class="tool-btn" id="btnExportPng" title="Exportar PNG">PNG</button>
+                <button class="tool-btn" id="btnExportReport" title="Exportar reporte HTML">Rep</button>
                 <button class="tool-btn" id="btnCopy" title="Copiar al portapapeles">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
@@ -458,6 +481,16 @@
     </div>
 </div>
 
+<!-- Panel flotante de histograma -->
+<div id="histogramPanel" class="histogram-panel hidden">
+    <div class="hp-header">
+        <span class="hp-title">Histograma HU</span>
+        <button class="mp-header-btn" id="histogramPanelClose" title="Cerrar">✕</button>
+    </div>
+    <canvas id="histCanvas" class="hist-canvas"></canvas>
+    <div class="hp-hint">Arrastrar líneas amarillas para ajustar W/L</div>
+</div>
+
 <!-- STATUS BAR -->
 <footer id="statusBar">
     <span id="statusSlice">Slice: —</span>
@@ -502,8 +535,10 @@
 <script src="js/series-panel.js"></script>
 <script src="js/mpr-volume.js"></script>
 <script src="js/mpr-viewport.js"></script>
+<script src="js/series-manager.js"></script>
 <script src="js/metadata-panel.js"></script>
 <script src="js/measurements-panel.js"></script>
+<script src="js/histogram-panel.js"></script>
 <script src="js/export.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/app.js"></script>

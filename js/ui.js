@@ -48,14 +48,9 @@ const UI = {
             btn.addEventListener('click', () => ToolState.setTool(btn.dataset.tool));
         });
 
-        // Windowing presets
-        document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const vp = ViewportLayout.getActive();
-                vp?.applyPreset(btn.dataset.preset);
-                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            });
+        // Windowing preset select
+        document.getElementById('presetSelect')?.addEventListener('change', (e) => {
+            ViewportLayout.getActive()?.applyPreset(e.target.value);
         });
 
         // Color maps
@@ -109,6 +104,7 @@ const UI = {
         document.getElementById('btnInvert')?.addEventListener('click',    () => ViewportLayout.getActive()?.toggleInvert());
         document.getElementById('btnSuperRes')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleSuperRes());
         document.getElementById('btnAnonymize')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleAnonymize());
+        document.getElementById('btnAbMode')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleAbMode());
 
         // Zoom panel
         this._wireZoomPanel();
@@ -118,7 +114,17 @@ const UI = {
 
         // Export
         document.getElementById('btnExportPng')?.addEventListener('click', () => Export.exportPNG());
+        document.getElementById('btnExportReport')?.addEventListener('click', () => Export.exportReport());
         document.getElementById('btnCopy')?.addEventListener('click', () => Export.copyToClipboard());
+
+        // Auto W/L
+        document.getElementById('btnAutoWindow')?.addEventListener('click', () => ViewportLayout.getActive()?.autoWindow());
+
+        // Viewport sync
+        document.getElementById('btnSync')?.addEventListener('click', () => ViewportLayout.toggleSync());
+
+        // Histogram panel
+        this._wireHistogramPanel();
 
         // Cine
         document.getElementById('cinePlay')?.addEventListener('click', () => SeriesPanel.toggleCine());
@@ -134,6 +140,20 @@ const UI = {
 
         // Context menu
         this._wireContextMenu();
+    },
+
+    /* ── Histogram panel ────────────────────────────── */
+    _wireHistogramPanel() {
+        const panel = document.getElementById('histogramPanel');
+        const btn   = document.getElementById('btnHistogram');
+        if (!panel) return;
+
+        btn?.addEventListener('click', (e) => { e.stopPropagation(); HistogramPanel.toggle(); });
+        document.getElementById('histogramPanelClose')?.addEventListener('click', () => HistogramPanel.close());
+
+        document.addEventListener('click', (e) => {
+            if (!panel.contains(e.target) && e.target !== btn) HistogramPanel.close();
+        }, true);
     },
 
     /* ── Help modal ─────────────────────────────────── */
@@ -453,6 +473,10 @@ const UI = {
     /* ── Aplicar settings guardados ─────────────────── */
     applySettings() {
         const settings = Storage.getSettings();
+
+        // Windowing preset select
+        const presetSel = document.getElementById('presetSelect');
+        if (presetSel) presetSel.value = settings.activePreset || DEFAULT_PRESET;
 
         // Color map
         const mapBtn = document.querySelector(`.tool-btn[data-map="${settings.activeColorMap}"]`);

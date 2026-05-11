@@ -32,7 +32,8 @@ ToolHandlers[TOOL_IDS.WINDOWING] = {
         s.windowCenter = s.windowCenter - dy * WL_SENSITIVITY;
 
         // Desactivar preset seleccionado (custom)
-        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        const presetSel = document.getElementById('presetSelect');
+        if (presetSel) presetSel.value = '';
         this._updateStatus(s);
     },
     _updateStatus(s) {

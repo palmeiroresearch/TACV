@@ -89,8 +89,15 @@ const SeriesPanel = {
         this._activeIndex = index;
 
         const vp = ViewportLayout.getActive();
-        if (vp && this._series[index]) {
-            vp.loadFrame(this._series[index], index, this._series.length);
+        const frame = this._series[index];
+        if (ViewportLayout.syncEnabled && frame) {
+            ViewportLayout.getAll().forEach(v => {
+                if (!v.mprPlane || v.mprPlane === 'axial') {
+                    v.loadFrame(frame, index, this._series.length);
+                }
+            });
+        } else if (vp && frame) {
+            vp.loadFrame(frame, index, this._series.length);
         }
 
         // Actualizar crosshair en los viewports MPR (coronal/sagital muestran línea de posición axial)

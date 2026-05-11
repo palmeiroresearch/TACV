@@ -20,6 +20,9 @@
     // Measurements panel
     MeasurementsPanel.init();
 
+    // Histogram panel
+    HistogramPanel.init();
+
     // Worker pool para parseo DICOM
     DicomLoader.init();
 
@@ -31,7 +34,8 @@
     ToolState.setTool(TOOL_IDS.WINDOWING);
 
     // Preset inicial
-    document.querySelector('.preset-btn[data-preset="brain"]')?.classList.add('active');
+    const presetSel = document.getElementById('presetSelect');
+    if (presetSel) presetSel.value = DEFAULT_PRESET;
 
     // Keyboard shortcuts globales
     document.addEventListener('keydown', (e) => ToolState.onKeyDown(e));
@@ -39,6 +43,12 @@
     // Navegar slices (desde ToolState / SeriesPanel)
     Storage.on('navigateSlice', ({ delta }) => {
         SeriesPanel.navigateDelta(delta);
+    });
+
+    // Cambio de serie (desde SeriesManager tabs)
+    Storage.on('seriesChanged', ({ idx }) => {
+        _activateSeries(idx);
+        SeriesManager.renderTabs();
     });
 
     // Drag-drop + file picker
@@ -61,16 +71,10 @@ async function loadFiles(files) {
     document.getElementById('welcomeScreen')?.remove();
     UI.showLoadingBar();
 
-    let firstFrame = null;
-
-    const series = await DicomLoader.loadFiles(files, {
-        onProgress: (loaded, total) => {
-            UI.updateLoadingBar(loaded, total);
-        },
+    const allFrames = await DicomLoader.loadFiles(files, {
+        onProgress: (loaded, total) => UI.updateLoadingBar(loaded, total),
         onFrameLoaded: (frame, idx) => {
-            // Mostrar el primer frame inmediatamente
             if (idx === 0) {
-                firstFrame = frame;
                 const vp = ViewportLayout.getActive();
                 if (vp) vp.loadFrame(frame, 0, 1);
             }
@@ -79,12 +83,46 @@ async function loadFiles(files) {
 
     UI.hideLoadingBar();
 
-    if (!series || series.length === 0) {
+    if (!allFrames?.length) {
         UI.showToast('No se encontraron frames DICOM válidos', 'error');
         return;
     }
 
-    // Cargar serie en panel y viewport
+    // Agrupar por SeriesInstanceUID (tag x0020000e)
+    const byUID = new Map();
+    allFrames.forEach(frame => {
+        const uid = frame.allTags?.['x0020000e'] || 'default';
+        if (!byUID.has(uid)) byUID.set(uid, []);
+        byUID.get(uid).push(frame);
+    });
+
+    // Añadir cada serie al SeriesManager
+    let firstSeriesIdx = -1;
+    byUID.forEach((frames, uid) => {
+        const idx = SeriesManager.add(frames);
+        if (firstSeriesIdx === -1) firstSeriesIdx = idx;
+    });
+
+    SeriesManager.renderTabs();
+
+    // Cargar la primera serie nueva
+    _activateSeries(firstSeriesIdx === -1 ? 0 : firstSeriesIdx);
+
+    const total = allFrames.length;
+    const seriesCount = byUID.size;
+    UI.showToast(
+        `${total} imágenes cargadas${seriesCount > 1 ? ` en ${seriesCount} series` : ''} — ${allFrames[0].patientName || ''}`,
+        'success', 4000
+    );
+}
+
+/* ── Activar una serie por índice en SeriesManager ─────── */
+function _activateSeries(idx) {
+    SeriesManager.setActive(idx);
+    const entry  = SeriesManager.getActive();
+    if (!entry) return;
+    const series = entry.frames;
+
     SeriesPanel.init(series);
     const vp = ViewportLayout.getActive();
     if (vp) {
@@ -93,22 +131,15 @@ async function loadFiles(files) {
         vp.render();
     }
 
-    // Metadata del primer frame
     MetadataPanel.show(series[0]);
-
-    // Preparar buffer CPU para MPR (sincrónico — ~50ms para 40 frames)
-    // La subida a GPU ocurre lazy la primera vez que se activa el layout MPR
     MprVolume.setSeries(series);
 
-    // Guardamos en IDB el session state
     Storage.saveSession({
         sliceIndex: 0,
         windowWidth:  vp?.state.windowWidth,
         windowCenter: vp?.state.windowCenter,
         zoom: 1, panX: 0, panY: 0,
     });
-
-    UI.showToast(`${series.length} imágenes cargadas — ${series[0].patientName || ''}`, 'success', 4000);
 }
 
 /* ── Aplicar estado de sesión guardado ──────────────────── */
