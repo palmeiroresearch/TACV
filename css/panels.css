@@ -111,6 +111,144 @@
     color: var(--text-tertiary); cursor: pointer;
 }
 
+/* ── Panel de filtros de imagen ──────────────────────────── */
+.filters-panel {
+    position: fixed;
+    z-index: 8500;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    width: 268px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    animation: scaleIn 0.15s ease;
+    transform-origin: top right;
+}
+.filters-panel.hidden { display: none; }
+
+.fp-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: var(--bg-card); z-index: 1;
+}
+.fp-title {
+    font-size: 11px; font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: 0.07em;
+}
+.fp-close {
+    font-size: 12px; color: var(--text-tertiary);
+    background: none; border: none; cursor: pointer; padding: 2px 4px;
+    border-radius: 4px; transition: all var(--fast);
+}
+.fp-close:hover { background: var(--bg-secondary); color: var(--text-primary); }
+
+/* Sección de cada filtro */
+.fp-section {
+    padding: 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.fp-section:last-of-type { border-bottom: none; }
+
+.fp-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 2px;
+}
+.fp-label {
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+}
+.fp-hint {
+    font-size: 10px; color: var(--text-tertiary); margin-bottom: 4px;
+}
+
+/* Toggle switch */
+.fp-toggle { position: relative; display: inline-block; flex-shrink: 0; }
+.fp-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.fp-toggle-track {
+    display: block; width: 34px; height: 18px;
+    background: var(--bg-tertiary);
+    border-radius: 99px; cursor: pointer;
+    transition: background var(--fast);
+    position: relative;
+}
+.fp-toggle-track::after {
+    content: '';
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+    transition: all var(--fast);
+}
+.fp-toggle input:checked + .fp-toggle-track {
+    background: rgba(120,218,171,0.3);
+}
+.fp-toggle input:checked + .fp-toggle-track::after {
+    background: var(--brand-accent);
+    transform: translateX(16px);
+}
+
+/* Parámetros (se muestran solo cuando el filtro está ON) */
+.fp-params {
+    display: none;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+}
+.fp-params.visible { display: block; }
+
+.fp-slider-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 36px;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 11px; color: var(--text-secondary);
+}
+.fp-slider-row input[type="range"] {
+    -webkit-appearance: none;
+    height: 3px; border-radius: 99px;
+    background: var(--bg-tertiary);
+    outline: none; cursor: pointer;
+}
+.fp-slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--brand-accent);
+    cursor: pointer;
+}
+.fp-slider-row span:last-child {
+    text-align: right; font-variant-numeric: tabular-nums;
+    color: var(--brand-accent); font-weight: 600;
+}
+
+.fp-radio-row {
+    display: flex; gap: 14px;
+    font-size: 11px; color: var(--text-secondary);
+    margin-top: 2px;
+}
+.fp-radio-row label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.fp-radio-row input[type="radio"] { accent-color: var(--brand-accent); }
+
+/* Botón reset */
+.fp-reset {
+    display: block; width: calc(100% - 28px);
+    margin: 6px 14px 10px;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    font-size: 11px; font-weight: 600;
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all var(--fast);
+    text-align: center;
+}
+.fp-reset:hover { color: var(--danger); border-color: var(--danger); background: rgba(239,68,68,0.08); }
+
 /* ── Zoom panel flotante ─────────────────────────────────── */
 .zoom-panel {
     position: fixed;

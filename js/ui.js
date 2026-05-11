@@ -98,7 +98,12 @@ const UI = {
             vp.render();
         });
         document.getElementById('btnFlipH')?.addEventListener('click', () => ViewportLayout.getActive()?.flipH());
-        document.getElementById('btnFlipV')?.addEventListener('click', () => ViewportLayout.getActive()?.flipV());
+        document.getElementById('btnFlipV')?.addEventListener('click', () => {
+            ViewportLayout.getActive()?.flipV();
+            // Sincronizar apariencia del botón con el estado real
+            const vp = ViewportLayout.getActive();
+            document.getElementById('btnFlipV')?.classList.toggle('on', vp?.state?.flipV ?? false);
+        });
         document.getElementById('btnRotCW')?.addEventListener('click', () => ViewportLayout.getActive()?.rotateCW());
         document.getElementById('btnRotCCW')?.addEventListener('click', () => ViewportLayout.getActive()?.rotateCCW());
         document.getElementById('btnInvert')?.addEventListener('click',    () => ViewportLayout.getActive()?.toggleInvert());
@@ -106,6 +111,9 @@ const UI = {
 
         // Zoom panel
         this._wireZoomPanel();
+
+        // Filters panel
+        this._wireFiltersPanel();
 
         // Export
         document.getElementById('btnExportPng')?.addEventListener('click', () => Export.exportPNG());
@@ -116,6 +124,113 @@ const UI = {
         document.getElementById('cinePrev')?.addEventListener('click', () => SeriesPanel.navigateDelta(-1));
         document.getElementById('cineNext')?.addEventListener('click', () => SeriesPanel.navigateDelta(1));
         document.getElementById('cineFps')?.addEventListener('input', (e) => SeriesPanel.setFps(parseInt(e.target.value)));
+    },
+
+    /* ── Filters panel ──────────────────────────────── */
+    _wireFiltersPanel() {
+        const panel  = document.getElementById('filtersPanel');
+        const openBtn = document.getElementById('btnFilters');
+        if (!panel || !openBtn) return;
+
+        // Abrir / cerrar
+        const open = () => {
+            const rect = openBtn.getBoundingClientRect();
+            panel.style.top   = (rect.bottom + 6) + 'px';
+            panel.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
+            panel.style.left  = 'auto';
+            panel.classList.remove('hidden');
+            openBtn.classList.add('active');
+        };
+        const close = () => {
+            panel.classList.add('hidden');
+            openBtn.classList.remove('active');
+        };
+
+        openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panel.classList.contains('hidden') ? open() : close();
+        });
+        document.getElementById('filtersPanelClose')?.addEventListener('click', close);
+        document.addEventListener('click', (e) => {
+            if (!panel.contains(e.target) && e.target !== openBtn) close();
+        });
+
+        // Helper: conectar checkbox → toggle de filtro + mostrar/ocultar params
+        const wireToggle = (checkId, stateKey, paramsId) => {
+            const chk = document.getElementById(checkId);
+            const params = paramsId ? document.getElementById(paramsId) : null;
+            if (!chk) return;
+            chk.addEventListener('change', () => {
+                ViewportLayout.getAll().forEach(vp => vp.setFilter(stateKey, chk.checked));
+                if (params) params.classList.toggle('visible', chk.checked);
+            });
+        };
+
+        // Helper: conectar slider → campo de estado
+        const wireSlider = (sliderId, labelId, stateKey, decimals = 1) => {
+            const sl = document.getElementById(sliderId);
+            const lb = document.getElementById(labelId);
+            if (!sl) return;
+            sl.addEventListener('input', () => {
+                const val = parseFloat(sl.value);
+                if (lb) lb.textContent = val.toFixed(decimals);
+                ViewportLayout.getAll().forEach(vp => vp.setFilter(stateKey, val));
+            });
+        };
+
+        // Bicubic
+        wireToggle('chkBicubic', 'bicubicEnabled', null);
+
+        // Unsharp Masking
+        wireToggle('chkUsm', 'usmEnabled', 'paramsUsm');
+        wireSlider('slUsm',  'lblUsm',  'usmStrength',  1);
+        wireSlider('slUsmR', 'lblUsmR', 'usmRadius',    1);
+
+        // Bilateral
+        wireToggle('chkBilateral', 'bilateralEnabled', 'paramsBilateral');
+        wireSlider('slBilS', 'lblBilS', 'bilateralSigmaS', 1);
+        wireSlider('slBilR', 'lblBilR', 'bilateralSigmaR', 2);
+
+        // Anisotropic Diffusion
+        wireToggle('chkAniso', 'anisoEnabled', 'paramsAniso');
+        wireSlider('slAnisoN', 'lblAnisoN', 'anisoIterations', 0);
+        wireSlider('slAnisoK', 'lblAnisoK', 'anisoK', 2);
+        document.querySelectorAll('input[name="anisoFunc"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                const val = parseInt(radio.value);
+                ViewportLayout.getAll().forEach(vp => vp.setFilter('anisoFunc', val));
+            });
+        });
+
+        // CLAHE
+        wireToggle('chkClahe', 'claheEnabled', 'paramsClahe');
+        wireSlider('slClaheClip', 'lblClaheClip', 'claheClipLimit', 1);
+        wireSlider('slClaheStr',  'lblClaheStr',  'claheStrength',  2);
+
+        // Retinex
+        wireToggle('chkRetinex', 'retinexEnabled', 'paramsRetinex');
+        wireSlider('slRetGain', 'lblRetGain', 'retinexGain',   2);
+        wireSlider('slRetOff',  'lblRetOff',  'retinexOffset', 2);
+
+        // Reset todo
+        document.getElementById('btnFiltersReset')?.addEventListener('click', () => {
+            // Desmarcar todos los checkboxes
+            ['chkBicubic','chkUsm','chkBilateral','chkAniso','chkClahe','chkRetinex']
+                .forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; });
+            // Ocultar params
+            ['paramsUsm','paramsBilateral','paramsAniso','paramsClahe','paramsRetinex']
+                .forEach(id => document.getElementById(id)?.classList.remove('visible'));
+            // Resetear estado en todos los viewports
+            const defaults = {
+                bicubicEnabled: false, usmEnabled: false, bilateralEnabled: false,
+                anisoEnabled: false,   claheEnabled: false, retinexEnabled: false,
+            };
+            ViewportLayout.getAll().forEach(vp => {
+                Object.assign(vp.state, defaults);
+                vp.render();
+            });
+            UI.showToast('Filtros restablecidos', 'info', 2000);
+        });
     },
 
     /* ── Zoom panel ──────────────────────────────────── */

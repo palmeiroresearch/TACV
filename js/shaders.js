@@ -42,6 +42,7 @@ uniform float u_wMax;
 uniform bool  u_invert;
 uniform bool  u_superRes;   // Super-resolución CT-compatible (PMC10225926)
 uniform vec2  u_texSize;    // vec2(cols, rows) de la textura fuente
+uniform bool  u_toFbo;      // true → emitir grises sin colormap (para PostProcessor)
 
 // Muestreo seguro de raw Int16 con bounds check
 float sampleRaw(vec2 tc) {
@@ -92,7 +93,12 @@ void main() {
     float gray = clamp((hu - u_wMin) / (u_wMax - u_wMin), 0.0, 1.0);
     if (u_invert) gray = 1.0 - gray;
 
-    fragColor = texture(u_colormap, vec2(gray, 0.5));
+    // Modo FBO: emitir grises puros para que PostProcessor aplique los filtros
+    if (u_toFbo) {
+        fragColor = vec4(gray, gray, gray, 1.0);
+    } else {
+        fragColor = texture(u_colormap, vec2(gray, 0.5));
+    }
 }`,
 
     /* ── Fragment shader — MPR (R32F sampler3D) ─── */

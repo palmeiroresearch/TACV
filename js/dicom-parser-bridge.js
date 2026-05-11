@@ -28,13 +28,41 @@ const DicomBridge = {
         const u16 = (tag)  => dataSet.uint16(tag);
         const ds  = (tag)  => this._parseDS(s(tag));
 
+        // PixelSpacing necesita lectura robusta: intentar string(), floatString y ds()
+        const parsePixelSpacing = () => {
+            // Método 1: string con separador backslash DICOM estándar
+            const str = s('x00280030');
+            if (str) {
+                const p = this._parseDS(str);
+                if (p && p.length >= 2 && p[0] > 0.01) return p;
+            }
+            // Método 2: leer como floatString (dicom-parser accede al valor nativo)
+            try {
+                const row = dataSet.floatString('x00280030', 0);
+                const col = dataSet.floatString('x00280030', 1);
+                if (row > 0.01 && col > 0.01) return [row, col];
+                if (row > 0.01) return [row, row];  // asumir isotropía si solo hay 1 valor
+            } catch {}
+            // Método 3: ImagerPixelSpacing (algunos equipos lo usan en vez del anterior)
+            const str2 = s('x00181164');
+            if (str2) {
+                const p2 = this._parseDS(str2);
+                if (p2 && p2.length >= 2 && p2[0] > 0.01) return p2;
+            }
+            return null;
+        };
+
         const rows = u16('x00280010') || 512;
         const cols = u16('x00280011') || 512;
         const bitsAlloc    = u16('x00280100') || 16;
         const pixelRep     = u16('x00280103') || 0; // 0=unsigned, 1=signed
         const slope        = f('x00281053') ?? 1;
         const intercept    = f('x00281052') ?? -1024;
-        const pixelSpacing = ds('x00280030') || ds('x00181164') || [1, 1];
+        const pixelSpacing = parsePixelSpacing() || [1, 1];
+        if (pixelSpacing[0] === 1 && pixelSpacing[1] === 1) {
+            console.warn('[DICOM] PixelSpacing no encontrado —', filename,
+                '— MPR sagital/coronal puede aparecer distorsionado.');
+        }
         const imgPos       = ds('x00200032') || [0, 0, 0];
         const sliceLoc     = f('x00201041') ?? (imgPos[2] || 0);
         const instanceNum  = i('x00200013') ?? 0;

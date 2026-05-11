@@ -144,6 +144,10 @@ class MprViewport extends Viewport {
     setSliceFraction(f) {
         this._sliceFraction = Math.max(0.01, Math.min(0.99, f));
         this.render();
+        // Actualizar crosshair en todos los demás viewports
+        if (typeof ViewportLayout !== 'undefined') {
+            ViewportLayout.getAll().forEach(vp => { if (vp !== this) vp.render(); });
+        }
     }
 
     _getPlaneData() {

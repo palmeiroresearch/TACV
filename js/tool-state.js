@@ -114,10 +114,11 @@ const ToolState = {
             viewport.setSliceFraction(viewport._sliceFraction + delta);
             // setSliceFraction ya llama render()
         } else {
-            // Viewport axial: scroll navega slices de la serie
+            // Viewport axial: scroll navega slices.
+            // SeriesPanel.jumpTo ya llama vp.render() — NO llamar render() extra aquí
+            // porque con filtros activos el doble render deja el FBO en estado inválido.
             const delta = e.deltaY > 0 ? 1 : -1;
             Storage.dispatch('navigateSlice', { delta, viewportId: viewport.id });
-            viewport.render();
         }
         this._saveSession(viewport);
     },

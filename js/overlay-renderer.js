@@ -21,6 +21,10 @@ const OverlayRenderer = {
         this.drawOrientationMarkers(viewport);
         this.drawScaleBar(viewport);
         this.drawMeasurements(viewport);
+        // Crosshair triplanar (solo en layout MPR)
+        if (viewport.mprPlane !== undefined) {
+            this.drawMprCrosshair(viewport);
+        }
         if (viewport.state.activeTool === TOOL_IDS.PROBE) {
             this.drawCrosshair(viewport);
         }
@@ -107,8 +111,20 @@ const OverlayRenderer = {
         const ctx  = viewport.overlayCtx;
         const cw   = viewport.overlayCanvas.width;
         const ch   = viewport.overlayCanvas.height;
-        const m    = viewport.state.orientationLabels || ORIENTATION_AXIAL;
+        const s    = viewport.state;
         const pad  = 28;
+
+        // Aplicar flip/rotate a los labels base para que coincidan con la imagen
+        let base = s.orientationLabels || ORIENTATION_AXIAL;
+        let { top, bottom, left, right } = base;
+
+        if (s.flipH)  { [left, right] = [right, left]; }
+        if (s.flipV)  { [top, bottom] = [bottom, top]; }
+
+        const rot = s.rotation ?? 0;
+        if (rot === 90)  { [top, right, bottom, left] = [left, top, right, bottom]; }
+        if (rot === 180) { [top, bottom] = [bottom, top]; [left, right] = [right, left]; }
+        if (rot === 270) { [top, right, bottom, left] = [right, bottom, left, top]; }
 
         ctx.font      = '14px Inter, sans-serif';
         ctx.fillStyle = 'rgba(255,220,0,0.9)';
@@ -117,17 +133,17 @@ const OverlayRenderer = {
 
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(m.top, cw / 2, pad);
+        ctx.fillText(top, cw / 2, pad);
 
         ctx.textBaseline = 'bottom';
-        ctx.fillText(m.bottom, cw / 2, ch - pad);
+        ctx.fillText(bottom, cw / 2, ch - pad);
 
         ctx.textAlign    = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(m.left, pad, ch / 2);
+        ctx.fillText(left, pad, ch / 2);
 
         ctx.textAlign    = 'right';
-        ctx.fillText(m.right, cw - pad, ch / 2);
+        ctx.fillText(right, cw - pad, ch / 2);
 
         ctx.shadowBlur = 0;
         ctx.textAlign  = 'left';
@@ -329,6 +345,108 @@ const OverlayRenderer = {
         const live = viewport.state.liveMeasurement;
         if (!live) return;
         this._drawMeasurement(viewport, { ...live, selected: true });
+    },
+
+    /* ── Crosshair triplanar ─────────────────────────── */
+    // Colores por plano de referencia
+    _COLORS: { axial: '#FFD700', coronal: '#00CFFF', sagital: '#FF6B6B' },
+
+    drawMprCrosshair(viewport) {
+        const vps = typeof ViewportLayout !== 'undefined' ? ViewportLayout.getAll() : [];
+        if (vps.length < 2) return;
+
+        // Encontrar viewports por plano
+        const find = (plane) => vps.find(v => v.mprPlane === plane);
+        const axialVP    = find('axial');
+        const coronalVP  = find('coronal');
+        const sagitalVP  = find('sagital');
+
+        const dims = typeof MprVolume !== 'undefined' ? MprVolume.getDims() : null;
+        if (!dims) return;
+
+        const ctx = viewport.overlayCtx;
+        const cw  = viewport.overlayCanvas.width;
+        const ch  = viewport.overlayCanvas.height;
+        const C   = this._COLORS;
+
+        const axialZ = axialVP
+            ? (axialVP.state.sliceIndex + 0.5) / (axialVP.state.totalSlices || dims.depth)
+            : 0.5;
+        const coronalY = coronalVP ? (coronalVP._sliceFraction ?? 0.5) : 0.5;
+        const sagitalX = sagitalVP ? (sagitalVP._sliceFraction ?? 0.5) : 0.5;
+
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur  = 3;
+
+        // ── Vista AXIAL: líneas de coronal (horizontal) y sagital (vertical)
+        if (viewport.mprPlane === 'axial' && viewport.state.frame) {
+            const f = viewport.state.frame;
+            // Coronal: línea horizontal en la fila donde corta el plano coronal
+            const rowY = coronalY * f.rows;
+            const screenCoronal = viewport.imageToCanvas(f.cols / 2, rowY);
+            ctx.strokeStyle = C.coronal;
+            ctx.beginPath();
+            ctx.moveTo(0, screenCoronal.y);
+            ctx.lineTo(cw, screenCoronal.y);
+            ctx.stroke();
+
+            // Sagital: línea vertical en la columna donde corta el plano sagital
+            const colX = sagitalX * f.cols;
+            const screenSagital = viewport.imageToCanvas(colX, f.rows / 2);
+            ctx.strokeStyle = C.sagital;
+            ctx.beginPath();
+            ctx.moveTo(screenSagital.x, 0);
+            ctx.lineTo(screenSagital.x, ch);
+            ctx.stroke();
+        }
+
+        // ── Vistas CORONAL y SAGITAL: líneas de axial (Z) y la otra vista
+        if (viewport.mprPlane === 'coronal' || viewport.mprPlane === 'sagital') {
+            // Línea horizontal = posición axial (Z)
+            const axialScreenY = this._mprTexcoordToScreenY(axialZ, viewport, ch);
+            ctx.strokeStyle = C.axial;
+            ctx.beginPath();
+            ctx.moveTo(0, axialScreenY);
+            ctx.lineTo(cw, axialScreenY);
+            ctx.stroke();
+
+            // Línea vertical = la otra vista MPR
+            const otherFrac = viewport.mprPlane === 'coronal' ? sagitalX : coronalY;
+            const otherScreenX = this._mprTexcoordToScreenX(otherFrac, viewport, cw);
+            ctx.strokeStyle = viewport.mprPlane === 'coronal' ? C.sagital : C.coronal;
+            ctx.beginPath();
+            ctx.moveTo(otherScreenX, 0);
+            ctx.lineTo(otherScreenX, ch);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    },
+
+    // Convierte texcoord.y [0,1] de volumen → posición Y en canvas del viewport MPR
+    _mprTexcoordToScreenY(tcY, viewport, ch) {
+        // Shader: v_texcoord.y = sy * (0.5 - canvas_y/ch) + ty + 0.5
+        // Invertido: canvas_y = (0.5 - (tcY - 0.5 - ty) / sy) * ch
+        const t = viewport._buildMprTransform ? viewport._buildMprTransform() : null;
+        if (!t) return (1 - tcY) * ch;
+        // t es Float32Array column-major 3x3: [m00,m10,m20, m01,m11,m21, m02,m12,m22]
+        const sy = t[4];   // m[1][1] = sy en la diagonal
+        const ty = t[7];   // m[2][1] = ty
+        const centered_y = (tcY - 0.5 - ty) / (sy || 1);
+        return Math.max(0, Math.min(ch, (0.5 - centered_y) * ch));
+    },
+
+    // Convierte texcoord.x [0,1] de volumen → posición X en canvas del viewport MPR
+    _mprTexcoordToScreenX(tcX, viewport, cw) {
+        const t = viewport._buildMprTransform ? viewport._buildMprTransform() : null;
+        if (!t) return tcX * cw;
+        const sx = t[0];   // m[0][0] = sx
+        const tx = t[6];   // m[2][0] = tx
+        const centered_x = (tcX - 0.5 - tx) / (sx || 1);
+        return Math.max(0, Math.min(cw, (0.5 + centered_x) * cw));
     },
 
     /* ── Crosshair del probe ──────────────────────────── */

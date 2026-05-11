@@ -27,7 +27,16 @@ class RendererGL {
         this._texColormap = null;
         this._uniforms    = {};
         this._currentColorMapId = null;
-        this._currentFrameId    = null;  // sopInstanceUID del frame en GPU
+        this._currentFrameId    = null;
+
+        // FBO intermedio para post-procesamiento (se crea lazy)
+        this._fboGray  = null;
+        this._texGray  = null;
+        this._fboW     = 0;
+        this._fboH     = 0;
+
+        // PostProcessor — se inicializa después de _init()
+        this.postProcessor = null;
 
         this._init();
     }
@@ -65,6 +74,7 @@ class RendererGL {
             invert:     gl.getUniformLocation(p, 'u_invert'),
             superRes:   gl.getUniformLocation(p, 'u_superRes'),
             texSize:    gl.getUniformLocation(p, 'u_texSize'),
+            toFbo:      gl.getUniformLocation(p, 'u_toFbo'),
         };
 
         // Textura de pixels (slot 0)
@@ -92,6 +102,13 @@ class RendererGL {
 
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         gl.clearColor(0, 0, 0, 1);
+
+        // Inicializar PostProcessor (tiene su propio VAO y shaders)
+        try {
+            this.postProcessor = new PostProcessor(gl);
+        } catch (e) {
+            console.warn('PostProcessor init failed:', e.message);
+        }
     }
 
     /* ── Subir pixel data (solo cuando cambia el frame) ── */
@@ -139,10 +156,32 @@ class RendererGL {
         this.uploadFrame(frame);
         this.uploadColormap(state.colorMapId || 'grayscale');
 
+        const filtersActive = this.postProcessor && PostProcessor.isActive(state);
+
+        // Si hay filtros activos: renderizar a FBO intermedio, luego PostProcessor al canvas
+        // Si no: fast path directo al canvas (comportamiento original)
+        if (filtersActive) {
+            // Forzar re-upload del frame: el PostProcessor puede haber dejado
+            // TEXTURE0 apuntando a sus propias texturas internas.
+            this._currentFrameId = null;
+            this._currentColorMapId = null;
+            this._ensureFboGray();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this._fboGray);
+            gl.viewport(0, 0, this._fboW, this._fboH);
+        } else {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        // Re-bind explícito: PostProcessor usa TEXTURE2/3 pero puede haber
+        // cambiado el active unit activo, restauramos slots 0 y 1.
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this._texPixels);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this._texColormap);
+
         gl.useProgram(this._program);
         gl.bindVertexArray(this._vao);
 
-        // Uniforms de windowing
         const preset = WINDOWING_PRESETS[state.presetId] || WINDOWING_PRESETS.brain;
         const ww = state.windowWidth  ?? preset.width;
         const wc = state.windowCenter ?? preset.center;
@@ -153,50 +192,108 @@ class RendererGL {
         gl.uniform1f(this._uniforms.intercept, frame.rescaleIntercept);
         gl.uniform1f(this._uniforms.wMin, wMin);
         gl.uniform1f(this._uniforms.wMax, wMax);
-        gl.uniform1i(this._uniforms.invert,    state.isInverted     ? 1 : 0);
+        gl.uniform1i(this._uniforms.invert,    state.isInverted        ? 1 : 0);
         gl.uniform1i(this._uniforms.superRes,  state.isSuperResEnabled ? 1 : 0);
-        gl.uniform2f(this._uniforms.texSize,   frame.cols, frame.rows);
+        // Cuando va a FBO: deshabilitar colormap para que FRAG_CT emita grises puros
+        gl.uniform1i(this._uniforms.toFbo, filtersActive ? 1 : 0);
+        gl.uniform2f(this._uniforms.texSize, frame.cols, frame.rows);
 
-        // Transform matrix 3x3 (espacio textura centrado en 0.5,0.5)
         const mat = this._buildTransform(frame, state);
         gl.uniformMatrix3fv(this._uniforms.transform, false, mat);
 
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        if (filtersActive) {
+            // Devolver renderizado al canvas via PostProcessor
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            this.postProcessor.process(
+                this._texGray,
+                this._texColormap,
+                state,
+                this.canvas.width,
+                this.canvas.height
+            );
+        }
+    }
+
+    /* ── FBO para renderizado intermedio (grises) ──────── */
+    _ensureFboGray() {
+        const gl  = this.gl;
+        const w   = this.canvas.width;
+        const h   = this.canvas.height;
+        if (this._fboGray && this._fboW === w && this._fboH === h) return;
+
+        this._fboW = w; this._fboH = h;
+        gl.getExtension('EXT_color_buffer_float');
+
+        if (this._texGray) gl.deleteTexture(this._texGray);
+        this._texGray = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this._texGray);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, h, 0, gl.RGBA, gl.FLOAT, null);
+
+        if (!this._fboGray) this._fboGray = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this._fboGray);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+                                gl.TEXTURE_2D, this._texGray, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        // No limpiar _currentFrameId — el frame ya fue subido antes de llamar a _ensureFboGray
     }
 
     /* ── Construir mat3 de transform ───────────────────── */
     _buildTransform(frame, state) {
-        const zoom   = state.zoom   ?? 1;
-        const panX   = state.panX   ?? 0;
-        const panY   = state.panY   ?? 0;
-        const flipH  = state.flipH  ?? false;
-        const flipV  = state.flipV  ?? false;
-        const rot    = (state.rotation ?? 0) * Math.PI / 180;
+        const zoom   = state.zoom     ?? 1;
+        const panX   = state.panX     ?? 0;
+        const panY   = state.panY     ?? 0;
+        const flipH  = state.flipH    ?? false;
+        const flipV  = state.flipV    ?? false;
+        const rotDeg = state.rotation ?? 0;
+        const rot    = rotDeg * Math.PI / 180;
 
-        const cw = this.canvas.width,  ch = this.canvas.height;
-        const iw = frame.cols,          ih = frame.rows;
+        const cw = this.canvas.width;
+        const ch = this.canvas.height;
+        const iw = frame.cols;
+        const ih = frame.rows;
 
-        // Escala base para encajar la imagen en el canvas (letterbox / pillarbox)
-        const baseZoom = Math.min(cw / iw, ch / ih);
+        // Para 90°/270°: las dimensiones efectivas de display se invierten
+        const is90 = (rotDeg === 90 || rotDeg === 270);
+        const effW = is90 ? ih : iw;
+        const effH = is90 ? iw : ih;
+        const baseZoom = Math.min(cw / effW, ch / effH);
 
-        // sx/sy en espacio de textura centrado:
-        // Un canvas de 1200×700 con imagen 512×512 → baseZoom≈1.37
-        // sx = cw/(baseZoom×iw×zoom) ≈ 1.71  →  textura "desborda" el quad → negro en bordes ✓
-        const sx = (cw / (baseZoom * iw * zoom)) * (flipH ? -1 : 1);
-        const sy = (ch / (baseZoom * ih * zoom)) * (flipV ? -1 : 1);
+        // Con rotación 90°/270° se intercambian sxAbs y syAbs para evitar distorsión
+        // en canvas no cuadrados. La textura X/Y se muestran en ejes de pantalla opuestos.
+        const sxAbs = is90
+            ? ch / (baseZoom * ih * zoom)   // usa dimensión Y de imagen para eje X
+            : cw / (baseZoom * iw * zoom);
+        const syAbs = is90
+            ? cw / (baseZoom * iw * zoom)   // usa dimensión X de imagen para eje Y
+            : ch / (baseZoom * ih * zoom);
 
+        const sx = sxAbs * (flipH ? -1 : 1);
+        const sy = syAbs * (flipV ? -1 : 1);
+
+        // Shader usa ángulo negativo (-rot) para rotar la textura (= imagen gira positivo)
         const cos = Math.cos(-rot);
         const sin = Math.sin(-rot);
 
-        // Pan en espacio de textura.
-        // X: canvas y texcoord crecen en la misma dirección → signo negativo ✓
-        // Y: canvas crece hacia abajo, texcoord OpenGL crece hacia arriba → signo POSITIVO
-        const tx = -panX / (baseZoom * iw * zoom);
-        const ty = +panY / (baseZoom * ih * zoom);
+        // Pan en espacio textura, compensando flip Y rotation.
+        // Derivado de T = -M·(panX/cw, -panY/ch) donde M es la matriz rotación-escala.
+        // crot/srot = rotación positiva (como se ve en pantalla)
+        const crot = Math.cos(rot);   // = cos(-rot) también
+        const srot = Math.sin(rot);   // = -sin(-rot)
 
-        // mat3 column-major: rotación + escala + pan
-        // row vectors for GLSL column-major: [col0 col1 col2]
+        const fxSign = flipH ? -1 : 1;
+        const fySign = flipV ? -1 : 1;
+
+        const tx = -fxSign * sxAbs * (crot * panX / cw + srot * panY / ch);
+        const ty =  fySign * syAbs * (crot * panY / ch - srot * panX / cw);
+
         return new Float32Array([
             cos * sx, -sin * sy, 0,
             sin * sx,  cos * sy, 0,
