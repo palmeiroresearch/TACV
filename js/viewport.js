@@ -52,6 +52,7 @@ class Viewport {
             // Opciones de visualización
             isInverted:        false,
             isSuperResEnabled: false,
+            anonymized:        false,
             colorMapId:        'grayscale',
 
             // Filtros de post-procesamiento
@@ -158,6 +159,12 @@ class Viewport {
     toggleSuperRes() {
         this.state.isSuperResEnabled = !this.state.isSuperResEnabled;
         document.getElementById('btnSuperRes')?.classList.toggle('on', this.state.isSuperResEnabled);
+        this.render();
+    }
+
+    toggleAnonymize() {
+        this.state.anonymized = !this.state.anonymized;
+        document.getElementById('btnAnonymize')?.classList.toggle('on', this.state.anonymized);
         this.render();
     }
 

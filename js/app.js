@@ -17,6 +17,9 @@
     // Metadata panel
     MetadataPanel.init();
 
+    // Measurements panel
+    MeasurementsPanel.init();
+
     // Worker pool para parseo DICOM
     DicomLoader.init();
 

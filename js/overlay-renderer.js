@@ -56,10 +56,11 @@ const OverlayRenderer = {
         ctx.shadowBlur   = 3;
         ctx.fillStyle    = 'rgba(255,255,255,0.88)';
 
-        // Top-left: paciente
-        const name = f.patientName || 'Anónimo';
-        const pid  = f.patientID   ? `ID: ${f.patientID}` : '';
-        const dob  = f.patientDOB  ? `DOB: ${f.patientDOB}` : '';
+        // Top-left: paciente (redactado si anonimización activa)
+        const anon = s.anonymized;
+        const name = anon ? '██████████' : (f.patientName || 'Anónimo');
+        const pid  = anon ? '' : (f.patientID  ? `ID: ${f.patientID}` : '');
+        const dob  = anon ? '' : (f.patientDOB ? `DOB: ${f.patientDOB}` : '');
         this._textBlock(ctx, pad, pad, [name, pid, dob].filter(Boolean));
 
         // Top-right: estudio

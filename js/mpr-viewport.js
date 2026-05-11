@@ -7,14 +7,32 @@ class MprViewport extends Viewport {
         this._mprProgram    = null;
         this._mprUniforms   = {};
         this._sliceFraction = 0.5;
+        this._cineInterval  = null;
+        this._cineDir       = 1;
+
+        const labelRow = document.createElement('div');
+        labelRow.className = 'viewport-label-row';
 
         const label = document.createElement('div');
         label.className   = 'viewport-label';
         label.textContent = { axial: 'Axial', coronal: 'Coronal', sagital: 'Sagital' }[plane] || plane;
-        cell.appendChild(label);
+        labelRow.appendChild(label);
+
+        if (plane !== 'axial') {
+            const cineBtn = document.createElement('button');
+            cineBtn.className   = 'mpr-cine-btn';
+            cineBtn.textContent = '▶';
+            cineBtn.title       = 'Cine — recorrer plano';
+            cineBtn.addEventListener('click', (e) => { e.stopPropagation(); this.toggleMprCine(); });
+            labelRow.appendChild(cineBtn);
+            this._cineBtnEl = cineBtn;
+        }
+
+        cell.appendChild(labelRow);
 
         if (plane !== 'axial' && this.renderer) {
             this._initMprShader();
+            this._initMprClickNav();
         }
     }
 
@@ -144,10 +162,86 @@ class MprViewport extends Viewport {
     setSliceFraction(f) {
         this._sliceFraction = Math.max(0.01, Math.min(0.99, f));
         this.render();
-        // Actualizar crosshair en todos los demás viewports
         if (typeof ViewportLayout !== 'undefined') {
             ViewportLayout.getAll().forEach(vp => { if (vp !== this) vp.render(); });
         }
+    }
+
+    /* ── Cine MPR ─────────────────────────────────────── */
+    startMprCine() {
+        if (this._cineInterval) return;
+        if (this._cineBtnEl) { this._cineBtnEl.textContent = '⏸'; }
+        this._cineInterval = setInterval(() => {
+            this._sliceFraction += this._cineDir * 0.025;
+            if (this._sliceFraction >= 0.99) { this._sliceFraction = 0.99; this._cineDir = -1; }
+            if (this._sliceFraction <= 0.01) { this._sliceFraction = 0.01; this._cineDir =  1; }
+            this.render();
+            ViewportLayout.getAll().forEach(vp => { if (vp !== this) vp.render(); });
+        }, 1000 / 12);
+    }
+
+    stopMprCine() {
+        if (!this._cineInterval) return;
+        clearInterval(this._cineInterval);
+        this._cineInterval = null;
+        if (this._cineBtnEl) { this._cineBtnEl.textContent = '▶'; }
+    }
+
+    toggleMprCine() { this._cineInterval ? this.stopMprCine() : this.startMprCine(); }
+
+    /* ── Navegación por click (A5) ────────────────────── */
+    _initMprClickNav() {
+        let downX = 0, downY = 0;
+        const gc = this.glCanvas;
+        gc.addEventListener('mousedown', (e) => { if (e.button === 0) { downX = e.clientX; downY = e.clientY; } });
+        gc.addEventListener('mouseup',   (e) => {
+            if (e.button !== 0) return;
+            if (Math.hypot(e.clientX - downX, e.clientY - downY) < 6) {
+                this._navigateToClick(e.clientX, e.clientY);
+            }
+        });
+    }
+
+    _navigateToClick(clientX, clientY) {
+        if (!MprVolume.isReady()) return;
+        const dims = MprVolume.getDims();
+        const cw   = this.glCanvas.offsetWidth  || this.glCanvas.width;
+        const ch   = this.glCanvas.offsetHeight || this.glCanvas.height;
+        if (!cw || !ch || !dims) return;
+
+        const rect = this.glCanvas.getBoundingClientRect();
+        const cx   = clientX - rect.left;
+        const cy   = clientY - rect.top;
+
+        const physW = this.mprPlane === 'coronal'
+            ? dims.width  * dims.spacingX
+            : dims.height * dims.spacingY;
+        const physH = dims.depth * dims.spacingZ;
+
+        const zoom     = this.state.zoom ?? 1;
+        const panX     = this.state.panX ?? 0;
+        const panY     = this.state.panY ?? 0;
+        const baseZoom = Math.min(cw / physW, ch / physH);
+        const sx = cw / (baseZoom * physW * zoom);
+        const sy = ch / (baseZoom * physH * zoom);
+        const tx = -panX / (baseZoom * physW * zoom);
+        const ty = -panY / (baseZoom * physH * zoom);
+
+        const tcX = sx * (cx / cw - 0.5) + tx + 0.5;
+        const tcY = sy * (cy / ch - 0.5) + ty + 0.5;
+
+        // Y maps to Z (depth) → navigate axial
+        const zFrac = Math.max(0.01, Math.min(0.99, tcY));
+        const series = SeriesPanel.getSeries();
+        if (series.length > 0) {
+            SeriesPanel.jumpTo(Math.round(zFrac * (series.length - 1)));
+        }
+
+        // X maps to the other horizontal plane
+        const xFrac      = Math.max(0.01, Math.min(0.99, tcX));
+        const otherPlane = this.mprPlane === 'coronal' ? 'sagital' : 'coronal';
+        const otherVp    = ViewportLayout.getAll().find(v => v instanceof MprViewport && v.mprPlane === otherPlane);
+        if (otherVp) otherVp.setSliceFraction(xFrac);
     }
 
     _getPlaneData() {

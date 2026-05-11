@@ -123,7 +123,19 @@ const ToolState = {
         this._saveSession(viewport);
     },
 
-    onContextMenu(e) { e.preventDefault(); },
+    onContextMenu(e) {
+        e.preventDefault();
+        const vp = this._activeViewport;
+        if (!vp) return;
+        const rect = vp.glCanvas.getBoundingClientRect();
+        const imgPos = vp.canvasToImage(e.clientX - rect.left, e.clientY - rect.top);
+        const hit = MeasurementStore.hitTest(vp.state.sliceIndex, imgPos.x, imgPos.y);
+        if (hit) {
+            MeasurementStore.selectOnly(hit.id);
+            vp.render();
+            UI.showContextMenu(e.clientX, e.clientY, hit);
+        }
+    },
 
     onKeyDown(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;

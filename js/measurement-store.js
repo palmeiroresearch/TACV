@@ -181,6 +181,7 @@ const MeasurementStore = {
             this._store.forEach((arr, key) => { serialized[key] = arr; });
             Storage.saveMeasurements(this._sessionId, serialized).catch(() => {});
         }, 500);
+        Storage.dispatch('measurementsChanged', {});
     },
 
     async restore(sessionId) {

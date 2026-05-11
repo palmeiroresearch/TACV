@@ -108,6 +108,7 @@ const UI = {
         document.getElementById('btnRotCCW')?.addEventListener('click', () => ViewportLayout.getActive()?.rotateCCW());
         document.getElementById('btnInvert')?.addEventListener('click',    () => ViewportLayout.getActive()?.toggleInvert());
         document.getElementById('btnSuperRes')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleSuperRes());
+        document.getElementById('btnAnonymize')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleAnonymize());
 
         // Zoom panel
         this._wireZoomPanel();
@@ -124,6 +125,112 @@ const UI = {
         document.getElementById('cinePrev')?.addEventListener('click', () => SeriesPanel.navigateDelta(-1));
         document.getElementById('cineNext')?.addEventListener('click', () => SeriesPanel.navigateDelta(1));
         document.getElementById('cineFps')?.addEventListener('input', (e) => SeriesPanel.setFps(parseInt(e.target.value)));
+
+        // Help modal
+        this._wireHelpModal();
+
+        // Measurements panel
+        this._wireMeasurementsPanel();
+
+        // Context menu
+        this._wireContextMenu();
+    },
+
+    /* ── Help modal ─────────────────────────────────── */
+    _wireHelpModal() {
+        const modal = document.getElementById('helpModal');
+        if (!modal) return;
+
+        const open  = () => modal.classList.remove('hidden');
+        const close = () => modal.classList.add('hidden');
+
+        document.getElementById('btnHelp')?.addEventListener('click', open);
+        document.getElementById('helpModalClose')?.addEventListener('click', close);
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.key === '?' || e.key === 'F1') { e.preventDefault(); modal.classList.toggle('hidden'); }
+            if (e.key === 'Escape') {
+                close();
+                document.getElementById('contextMenu')?.classList.add('hidden');
+                MeasurementsPanel.close();
+            }
+            if (e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                MeasurementsPanel.toggle();
+            }
+        });
+    },
+
+    /* ── Measurements panel ─────────────────────────── */
+    _wireMeasurementsPanel() {
+        const panel = document.getElementById('measurementsPanel');
+        const btn   = document.getElementById('btnMeasurementsPanel');
+        if (!panel) return;
+
+        btn?.addEventListener('click', (e) => { e.stopPropagation(); MeasurementsPanel.toggle(); });
+        document.getElementById('measurementsPanelClose')?.addEventListener('click', () => MeasurementsPanel.close());
+
+        document.addEventListener('click', (e) => {
+            if (!panel.contains(e.target) && e.target !== btn) MeasurementsPanel.close();
+        }, true);
+
+        document.getElementById('btnMpCsv')?.addEventListener('click',  () => Export.exportMeasurementsCSV());
+        document.getElementById('btnMpJson')?.addEventListener('click', () => Export.exportMeasurementsJSON());
+
+        document.getElementById('btnMpClearSlice')?.addEventListener('click', () => {
+            const vp = ViewportLayout.getActive();
+            if (!vp) return;
+            MeasurementStore.clearSlice(vp.state.sliceIndex);
+            vp.render();
+        });
+        document.getElementById('btnMpClearAll')?.addEventListener('click', () => {
+            if (confirm('¿Eliminar TODAS las mediciones del estudio?')) {
+                MeasurementStore.clearAll();
+                ViewportLayout.getAll().forEach(vp => vp.render());
+            }
+        });
+    },
+
+    /* ── Context menu ───────────────────────────────── */
+    _wireContextMenu() {
+        document.getElementById('ctxDelete')?.addEventListener('click', () => {
+            const menu = document.getElementById('contextMenu');
+            const id = parseInt(menu?.dataset.measurementId);
+            if (!isNaN(id)) {
+                MeasurementStore.delete(id);
+                ViewportLayout.getActive()?.render();
+            }
+            menu?.classList.add('hidden');
+        });
+        document.getElementById('ctxGoSlice')?.addEventListener('click', () => {
+            const menu = document.getElementById('contextMenu');
+            const id = parseInt(menu?.dataset.measurementId);
+            if (!isNaN(id)) {
+                const m = MeasurementStore.getAll().find(x => x.id === id);
+                if (m) SeriesPanel.jumpTo(m.sliceIndex);
+            }
+            menu?.classList.add('hidden');
+        });
+    },
+
+    /* ── showContextMenu (llamado desde tool-state) ── */
+    showContextMenu(x, y, measurement) {
+        const menu = document.getElementById('contextMenu');
+        if (!menu) return;
+        menu.style.left = Math.min(x, window.innerWidth  - 190) + 'px';
+        menu.style.top  = Math.min(y, window.innerHeight - 90)  + 'px';
+        menu.dataset.measurementId = measurement.id;
+        menu.classList.remove('hidden');
+
+        const close = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.classList.add('hidden');
+                document.removeEventListener('mousedown', close);
+            }
+        };
+        setTimeout(() => document.addEventListener('mousedown', close), 0);
     },
 
     /* ── Filters panel ──────────────────────────────── */

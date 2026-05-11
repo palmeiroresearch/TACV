@@ -56,6 +56,37 @@ const Export = {
         win.onafterprint = () => { win.close(); URL.revokeObjectURL(url); };
     },
 
+    /* ── Mediciones CSV ─────────────────────────────── */
+    exportMeasurementsCSV() {
+        const all = MeasurementStore.getAll();
+        if (!all.length) { UI.showToast('No hay mediciones para exportar', 'warning'); return; }
+        const rows = ['Slice,Tipo,Valor,Unidad,Detalle'];
+        all.sort((a, b) => a.sliceIndex - b.sliceIndex).forEach(m => {
+            let val = '', unit = '', detail = '';
+            switch (m.type) {
+                case 'distance':  val = m.distanceMm?.toFixed(2) ?? ''; unit = 'mm'; break;
+                case 'angle':     val = m.angleDeg?.toFixed(1) ?? ''; unit = 'deg'; break;
+                case 'ellipse':
+                case 'rectangle':
+                    val = m.stats?.mean ?? ''; unit = 'HU';
+                    detail = m.stats ? `std=${m.stats.std} min=${m.stats.min} max=${m.stats.max} area=${m.stats.area}mm2` : '';
+                    break;
+                case 'arrow':  val = m.label || ''; break;
+                case 'text':   val = m.text || ''; break;
+            }
+            rows.push(`${m.sliceIndex + 1},${m.type},${val},${unit},"${detail}"`);
+        });
+        this._download(new Blob([rows.join('\n')], { type: 'text/csv' }), 'mediciones.csv');
+        UI.showToast('Mediciones exportadas como CSV', 'success');
+    },
+
+    exportMeasurementsJSON() {
+        const all = MeasurementStore.getAll();
+        if (!all.length) { UI.showToast('No hay mediciones para exportar', 'warning'); return; }
+        this._download(new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' }), 'mediciones.json');
+        UI.showToast('Mediciones exportadas como JSON', 'success');
+    },
+
     /* ── Helper ──────────────────────────────────────── */
     _download(blob, filename) {
         const url = URL.createObjectURL(blob);
