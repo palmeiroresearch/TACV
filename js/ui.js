@@ -43,6 +43,11 @@ const UI = {
 
     /* ── Wire toolbar tool buttons ───────────────────── */
     wireToolbar() {
+        // En iOS: ocultar MPR (requiere TEXTURE_3D + float extensions que fallan en Safari)
+        if (typeof Capabilities !== 'undefined' && Capabilities.isIOS) {
+            document.querySelector('.layout-btn[data-layout="mpr"]')?.remove();
+        }
+
         // Tool buttons
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.addEventListener('click', () => ToolState.setTool(btn.dataset.tool));

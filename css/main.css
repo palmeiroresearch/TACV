@@ -195,3 +195,32 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ── Mobile / Touch ─────────────────────────────────────── */
+
+/* Evitar que el browser intercepte gestos sobre los canvases */
+.gl-canvas, .overlay-canvas {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Banner de modo degradado (iOS/mobile) */
+.caps-warning {
+    background: rgba(234,179,8,0.12);
+    border-bottom: 1px solid rgba(234,179,8,0.25);
+    color: #fbbf24; font-size: 11px;
+    padding: 5px 12px; text-align: center;
+    flex-shrink: 0;
+}
+
+/* Tablet: thumbnails más fáciles de tocar */
+.is-touch .thumb-item { min-height: 88px; }
+
+/* Teléfono (<600px): ocultar paneles secundarios para dar espacio a la imagen */
+@media (max-width: 599px) {
+    #metadataPanel { display: none !important; }
+    #seriesPanel   { width: 68px; }
+    .brand-name    { display: none; }
+    .mpr-slab-row  { display: none; }   /* controles MIP demasiado pequeños en phone */
+}

@@ -219,6 +219,7 @@ class RendererGL {
 
     /* ── FBO para renderizado intermedio (grises) ──────── */
     _ensureFboGray() {
+        if (typeof Capabilities !== 'undefined' && Capabilities.isIOS) return;
         const gl  = this.gl;
         const w   = this.canvas.width;
         const h   = this.canvas.height;

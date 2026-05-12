@@ -343,25 +343,70 @@ class Viewport {
         }, true);
         window.addEventListener('mouseup', () => { abDragging = false; });
 
-        // Touch support básico
+        // Touch multi-gesture: single-finger = tool drag, two-finger = pinch-zoom + pan
+        const _tprev = {};   // { touchId: {x, y} } — posición previa de cada dedo
+
         gc.addEventListener('touchstart', (e) => {
+            const rect = gc.getBoundingClientRect();
+            [...e.changedTouches].forEach(t => {
+                _tprev[t.identifier] = { x: t.clientX - rect.left, y: t.clientY - rect.top };
+            });
             if (e.touches.length === 1) {
-                ToolState.onMouseDown(this, this._touchToMouse(e.touches[0]));
+                const t = e.touches[0];
+                ToolState.onMouseDown(this, { clientX: t.clientX, clientY: t.clientY, button: 0 });
+            } else if (e.touches.length >= 2) {
+                ToolState.onMouseLeave(this);   // cancelar drag single-touch activo
             }
         }, { passive: true });
+
         gc.addEventListener('touchmove', (e) => {
             e.preventDefault();
+            const rect = gc.getBoundingClientRect();
+
             if (e.touches.length === 1) {
-                ToolState.onMouseMove(this, this._touchToMouse(e.touches[0]));
+                const t = e.touches[0];
+                ToolState.onMouseMove(this, { clientX: t.clientX, clientY: t.clientY, button: 0 });
+                _tprev[t.identifier] = { x: t.clientX - rect.left, y: t.clientY - rect.top };
+            } else if (e.touches.length >= 2) {
+                const t0 = e.touches[0], t1 = e.touches[1];
+                const cur0 = { x: t0.clientX - rect.left, y: t0.clientY - rect.top };
+                const cur1 = { x: t1.clientX - rect.left, y: t1.clientY - rect.top };
+                const prv0 = _tprev[t0.identifier] || cur0;
+                const prv1 = _tprev[t1.identifier] || cur1;
+
+                // Pinch: ratio de distancias → zoom
+                const prevDist = Math.hypot(prv1.x - prv0.x, prv1.y - prv0.y);
+                const curDist  = Math.hypot(cur1.x - cur0.x, cur1.y - cur0.y);
+                if (prevDist > 8) {
+                    const cx = (prv0.x + prv1.x) / 2;
+                    const cy = (prv0.y + prv1.y) / 2;
+                    this.zoomAt(cx, cy, curDist / prevDist);
+                }
+
+                // Traslación del punto medio → pan
+                const prevMX = (prv0.x + prv1.x) / 2, prevMY = (prv0.y + prv1.y) / 2;
+                const curMX  = (cur0.x + cur1.x) / 2, curMY  = (cur0.y + cur1.y) / 2;
+                this.state.panX += curMX - prevMX;
+                this.state.panY += curMY - prevMY;
+
+                _tprev[t0.identifier] = cur0;
+                _tprev[t1.identifier] = cur1;
+                this.render();
             }
         }, { passive: false });
-        gc.addEventListener('touchend', (e) => {
-            ToolState.onMouseUp(this, this._touchToMouse(e.changedTouches[0]));
-        }, { passive: true });
-    }
 
-    _touchToMouse(touch) {
-        return { clientX: touch.clientX, clientY: touch.clientY, button: 0 };
+        gc.addEventListener('touchend', (e) => {
+            [...e.changedTouches].forEach(t => delete _tprev[t.identifier]);
+            if (e.touches.length === 0) {
+                const t = e.changedTouches[0];
+                ToolState.onMouseUp(this, { clientX: t.clientX, clientY: t.clientY, button: 0 });
+            }
+        }, { passive: true });
+
+        gc.addEventListener('touchcancel', (e) => {
+            [...e.changedTouches].forEach(t => delete _tprev[t.identifier]);
+            ToolState.onMouseLeave(this);
+        }, { passive: true });
     }
 
     _updateStatusBar() {

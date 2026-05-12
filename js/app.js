@@ -5,6 +5,14 @@
    ============================================================ */
 
 (async function init() {
+    // Banner informativo en iOS/mobile (antes de todo lo demás)
+    if (typeof Capabilities !== 'undefined' && Capabilities.isIOS) {
+        const banner = document.createElement('div');
+        banner.className = 'caps-warning';
+        banner.textContent = 'Modo iPad/iOS — MPR y filtros avanzados desactivados · W/L: seleccionar herramienta W y arrastrar';
+        document.getElementById('appShell')?.prepend(banner);
+    }
+
     // Storage + session ID
     await Storage.initDB();
     const sessionId = 'session_' + Date.now();
