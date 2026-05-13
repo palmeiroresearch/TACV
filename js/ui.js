@@ -145,6 +145,37 @@ const UI = {
 
         // Context menu
         this._wireContextMenu();
+
+        // Adaptar toolbar a las capacidades del dispositivo
+        this._applyMobileAdaptations();
+    },
+
+    /* ── Adaptar toolbar según dispositivo ─────────────── */
+    _applyMobileAdaptations() {
+        const cap = (typeof Capabilities !== 'undefined') ? Capabilities : null;
+        if (!cap) return;
+
+        const rm  = (id)  => document.getElementById(id)?.remove();
+        const rmQ = (sel) => document.querySelector(sel)?.remove();
+
+        // iOS Safari: filtros FBO rotos + GPU pesado
+        if (cap.isIOS) {
+            rm('btnFilters');    // FBO RGBA32F no funciona en Safari
+            rm('btnSuperRes');   // shader experimental, pesado en mobile
+        }
+
+        // Cualquier táctil: controles que requieren arrastre preciso de mouse
+        if (cap.isTouch) {
+            rm('btnAbMode');     // divisor A/B requiere drag preciso
+            rm('btnHistogram');  // líneas W/L requieren drag preciso
+        }
+
+        // Teléfonos (<600px): layouts multi-viewport y sync innecesarios
+        if (cap.isMobile) {
+            rmQ('.layout-btn[data-layout="2x1"]');
+            rmQ('.layout-btn[data-layout="2x2"]');
+            rm('btnSync');
+        }
     },
 
     /* ── Histogram panel ────────────────────────────── */
