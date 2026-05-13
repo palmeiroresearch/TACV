@@ -45,6 +45,8 @@ const SeriesManager = {
         Storage.dispatch('seriesChanged', { idx, series: this._series[idx] });
     },
 
+    clear() { this._series = []; this._activeIdx = 0; },
+
     getActive()    { return this._series[this._activeIdx] || null; },
     getAll()       { return this._series; },
     getCount()     { return this._series.length; },

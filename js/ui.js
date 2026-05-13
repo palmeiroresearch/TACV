@@ -140,6 +140,9 @@ const UI = {
         // Case library
         document.getElementById('btnCaseLibrary')?.addEventListener('click', () => CaseLibrary.toggle());
 
+        // Cerrar estudio
+        document.getElementById('btnCloseStudy')?.addEventListener('click', () => closeAll());
+
         // Help modal
         this._wireHelpModal();
 

@@ -89,6 +89,8 @@ const MprVolume = {
         return true;
     },
 
+    clear() { this._rawData = null; this._dims = null; },
+
     getTexture(gl)        { return this._textures.get(gl) || null; },
     isReadyForContext(gl) { return this._textures.has(gl) && !!this._dims; },
     isReady()             { return !!this._rawData && !!this._dims; },

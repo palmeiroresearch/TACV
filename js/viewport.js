@@ -424,6 +424,19 @@ class Viewport {
         return new Promise(resolve => this.glCanvas.toBlob(resolve, type, quality));
     }
 
+    clearFrame() {
+        this.state.frame       = null;
+        this.state.sliceIndex  = 0;
+        this.state.totalSlices = 0;
+        if (this.renderer?.gl) {
+            const gl = this.renderer.gl;
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+        if (this.overlayCtx) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        }
+    }
+
     destroy() {
         this._resizeObs.disconnect();
         this.renderer?.destroy();

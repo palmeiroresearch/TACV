@@ -77,6 +77,20 @@
     border: 1px solid var(--border-strong);
 }
 
+/* Cerrar estudio */
+.btn-close-study {
+    width: auto; padding: 0 10px; gap: 5px;
+    font-size: 12px; font-weight: 600;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+}
+.btn-close-study:hover {
+    background: rgba(239,68,68,0.12);
+    color: var(--danger);
+    border-color: rgba(239,68,68,0.4);
+}
+
 /* Instalar PWA */
 .btn-install {
     width: auto; padding: 0 10px; gap: 5px;

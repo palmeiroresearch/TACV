@@ -107,6 +107,7 @@ function activateFrames(allFrames) {
 
     SeriesManager.renderTabs();
     _activateSeries(firstSeriesIdx === -1 ? 0 : firstSeriesIdx);
+    document.getElementById('btnCloseStudy')?.classList.remove('hidden');
 
     const total      = allFrames.length;
     const seriesCount = byUID.size;
@@ -160,6 +161,66 @@ function _activateSeries(idx) {
         windowCenter: vp?.state.windowCenter,
         zoom: 1, panX: 0, panY: 0,
     });
+}
+
+/* ── Cerrar estudio actual ──────────────────────────────── */
+function closeAll() {
+    SeriesPanel.stopCine();
+
+    SeriesManager.clear();
+    SeriesManager.renderTabs();
+    MprVolume.clear();
+
+    ViewportLayout.getAll().forEach(vp => vp.clearFrame());
+
+    const strip = document.getElementById('thumbnailStrip');
+    if (strip) strip.innerHTML = '';
+    document.getElementById('sliceCounter')?.classList.add('hidden');
+    document.getElementById('seriesTabBar')?.remove();
+
+    const patientInfo = document.getElementById('patientInfo');
+    if (patientInfo) patientInfo.innerHTML = '';
+    const metaTagList = document.getElementById('metaTagList');
+    if (metaTagList) metaTagList.innerHTML = '';
+
+    ['statusSlice','statusHU','statusWL','statusZoom','statusPos'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = ['Slice: —','HU: —','W: — L: —','Zoom: 100%','Pos: —'][i];
+    });
+    const statusStudy = document.getElementById('statusStudy');
+    if (statusStudy) statusStudy.textContent = '';
+
+    document.getElementById('btnCloseStudy')?.classList.add('hidden');
+
+    // Mostrar welcome screen si no está ya
+    if (!document.getElementById('welcomeScreen')) {
+        const ws = document.createElement('div');
+        ws.id = 'welcomeScreen';
+        ws.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--viewport-bg);z-index:100;animation:fadeIn 0.3s ease;';
+        ws.innerHTML = `
+            <div class="welcome-inner">
+                <div class="welcome-icon">⬡</div>
+                <h1 class="welcome-title">TAC Viewer</h1>
+                <p class="welcome-sub">Visor DICOM avanzado</p>
+                <div class="welcome-actions">
+                    <button class="btn-welcome-open" id="btnWelcomeOpen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        Abrir archivos DICOM
+                    </button>
+                    <p class="welcome-drag">o arrastrá los archivos .dcm aquí</p>
+                </div>
+                <div class="welcome-info">
+                    <span>Scroll: navegar slices</span>
+                    <span>Botón derecho + drag: W/L</span>
+                    <span>Ctrl + Scroll: zoom</span>
+                </div>
+            </div>`;
+        document.getElementById('mainArea')?.appendChild(ws);
+        document.getElementById('btnWelcomeOpen')?.addEventListener('click', () =>
+            document.getElementById('fileInput')?.click());
+    }
+
+    Storage.saveSession({});
 }
 
 /* ── Aplicar estado de sesión guardado ──────────────────── */
