@@ -160,6 +160,21 @@ const DicomBridge = {
         return parts.length ? parts : null;
     },
 
+    /* ── Header-only parse (sin pixel data) ────────── */
+    parseHeaderOnly(buffer) {
+        try {
+            const slice    = buffer.byteLength > 131072 ? buffer.slice(0, 131072) : buffer;
+            const byteArray = new Uint8Array(slice);
+            const dataSet  = dicomParser.parseDicom(byteArray, { stopTag: 'x7fe00010' });
+            const s = (tag) => { try { return (dataSet.string(tag) || '').trim() || null; } catch { return null; } };
+            return {
+                patientName: s('x00100010') || '',
+                studyDate:   s('x00080020') || '',
+                seriesDesc:  s('x0008103e') || s('x00081030') || '',
+            };
+        } catch { return null; }
+    },
+
     /* ── Extraer todos los tags para metadata panel ─── */
     _extractAllTags(dataSet) {
         const result = {};

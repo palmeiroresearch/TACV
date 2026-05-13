@@ -137,6 +137,9 @@ const UI = {
         document.getElementById('cineNext')?.addEventListener('click', () => SeriesPanel.navigateDelta(1));
         document.getElementById('cineFps')?.addEventListener('change', (e) => SeriesPanel.setFps(parseInt(e.target.value)));
 
+        // Case library
+        document.getElementById('btnCaseLibrary')?.addEventListener('click', () => CaseLibrary.toggle());
+
         // Help modal
         this._wireHelpModal();
 
@@ -211,6 +214,7 @@ const UI = {
                 close();
                 document.getElementById('contextMenu')?.classList.add('hidden');
                 MeasurementsPanel.close();
+                CaseLibrary.close();
             }
             if (e.key.toLowerCase() === 'm') {
                 e.preventDefault();

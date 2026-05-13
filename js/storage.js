@@ -2,7 +2,7 @@
 
 const Storage = {
     DB_NAME: 'TACViewerDB',
-    DB_VERSION: 1,
+    DB_VERSION: 2,
     _db: null,
 
     /* ── IndexedDB init ────────────────────────────────── */
@@ -17,6 +17,9 @@ const Storage = {
                 }
                 if (!db.objectStoreNames.contains('sessions')) {
                     db.createObjectStore('sessions', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('library')) {
+                    db.createObjectStore('library', { keyPath: 'id' });
                 }
             };
             req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
@@ -97,6 +100,47 @@ const Storage = {
 
     getSetting(key) {
         return this.getSettings()[key];
+    },
+
+    /* ── Case library ─────────────────────────────────── */
+    async saveLibraryIndex(cases) {
+        await this.initDB();
+        return new Promise((resolve) => {
+            const req = this._tx('library', 'readwrite').put({ id: 'index', cases, savedAt: Date.now() });
+            req.onsuccess = () => resolve();
+            req.onerror   = () => resolve();
+        });
+    },
+
+    async loadLibraryIndex() {
+        await this.initDB();
+        return new Promise((resolve) => {
+            const req = this._tx('library').get('index');
+            req.onsuccess = () => resolve(req.result?.cases || null);
+            req.onerror   = () => resolve(null);
+        });
+    },
+
+    async saveRootHandle(handle) {
+        await this.initDB();
+        return new Promise((resolve) => {
+            try {
+                const req = this._tx('library', 'readwrite').put({ id: 'rootHandle', handle });
+                req.onsuccess = () => resolve();
+                req.onerror   = () => resolve();
+            } catch { resolve(); }
+        });
+    },
+
+    async loadRootHandle() {
+        await this.initDB();
+        return new Promise((resolve) => {
+            try {
+                const req = this._tx('library').get('rootHandle');
+                req.onsuccess = () => resolve(req.result?.handle || null);
+                req.onerror   = () => resolve(null);
+            } catch { resolve(null); }
+        });
     },
 
     /* ── Custom events ─────────────────────────────────── */

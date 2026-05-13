@@ -31,6 +31,9 @@
     // Histogram panel
     HistogramPanel.init();
 
+    // Case library
+    CaseLibrary.init();
+
     // Worker pool para parseo DICOM
     DicomLoader.init();
 
@@ -46,7 +49,14 @@
     if (presetSel) presetSel.value = DEFAULT_PRESET;
 
     // Keyboard shortcuts globales
-    document.addEventListener('keydown', (e) => ToolState.onKeyDown(e));
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+            e.preventDefault();
+            CaseLibrary.toggle();
+            return;
+        }
+        ToolState.onKeyDown(e);
+    });
 
     // Navegar slices (desde ToolState / SeriesPanel)
     Storage.on('navigateSlice', ({ delta }) => {
