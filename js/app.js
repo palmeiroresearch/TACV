@@ -164,7 +164,80 @@ function applySession(session) {
 /* ── Service Worker ─────────────────────────────────────── */
 function registerSW() {
     if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('./sw.js').catch(err => {
-        console.warn('SW registration failed:', err);
+
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+        .then((registration) => {
+            // Forzar chequeo inmediato de nueva versión en cada apertura
+            registration.update().catch(() => {});
+
+            // ¿Ya hay un SW esperando? (tab estaba abierta durante install)
+            if (registration.waiting) {
+                _showUpdateBanner(registration);
+                return;
+            }
+
+            // Detectar nuevo SW mientras la app está abierta
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                if (!newWorker) return;
+                newWorker.addEventListener('statechange', () => {
+                    // "installed" + hay un controller = nuevo SW listo, esperando aprobación
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        _showUpdateBanner(registration);
+                    }
+                    // Primera instalación: activar sin preguntar
+                    if (newWorker.state === 'activated' && !navigator.serviceWorker.controller) {
+                        console.log('[SW] Primera instalación — app lista para uso offline');
+                    }
+                });
+            });
+        })
+        .catch((err) => console.warn('[SW] Registro fallido:', err));
+
+    // Cuando el nuevo SW toma control → recargar para usar los assets nuevos
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+    });
+}
+
+function _showUpdateBanner(registration) {
+    const banner = document.getElementById('swUpdateBanner');
+    if (!banner || !banner.classList.contains('hidden')) return;
+    banner.classList.remove('hidden');
+
+    const btnNow    = document.getElementById('btnSwUpdateNow');
+    const btnLater  = document.getElementById('btnSwUpdateLater');
+
+    const doUpdate = () => {
+        banner.classList.add('hidden');
+        registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+    };
+    const dismiss = () => banner.classList.add('hidden');
+
+    btnNow?.addEventListener('click',   doUpdate, { once: true });
+    btnLater?.addEventListener('click', dismiss,  { once: true });
+}
+
+/* ── PWA Install prompt ─────────────────────────────────── */
+let _installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _installPrompt = e;
+    document.getElementById('btnInstallPwa')?.classList.remove('hidden');
+});
+
+window.addEventListener('appinstalled', () => {
+    _installPrompt = null;
+    document.getElementById('btnInstallPwa')?.classList.add('hidden');
+    UI.showToast('App instalada — funciona completamente offline', 'success', 4000);
+});
+
+function triggerInstall() {
+    if (!_installPrompt) return;
+    _installPrompt.prompt();
+    _installPrompt.userChoice.then(() => {
+        _installPrompt = null;
+        document.getElementById('btnInstallPwa')?.classList.add('hidden');
     });
 }

@@ -196,6 +196,44 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
+/* ── PWA Update banner ───────────────────────────────────── */
+.sw-update-banner {
+    position: fixed;
+    bottom: calc(var(--statusbar-height) + 8px);
+    left: 50%; transform: translateX(-50%);
+    z-index: 800;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--brand-accent);
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    font-size: 12px; color: var(--text-primary);
+    white-space: nowrap;
+    animation: slideUp 0.25s ease;
+}
+@keyframes slideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.sw-update-banner span { color: var(--text-secondary); }
+.sw-update-banner svg  { color: var(--brand-accent); flex-shrink: 0; }
+#btnSwUpdateNow {
+    padding: 4px 12px;
+    background: var(--brand-accent);
+    color: #0f172a; font-size: 11px; font-weight: 700;
+    border-radius: var(--radius-sm);
+    transition: opacity var(--fast);
+}
+#btnSwUpdateNow:hover { opacity: 0.85; }
+#btnSwUpdateLater {
+    padding: 4px 8px;
+    font-size: 11px; color: var(--text-tertiary);
+    border-radius: var(--radius-sm);
+    transition: color var(--fast);
+}
+#btnSwUpdateLater:hover { color: var(--text-primary); }
+
 /* ── Mobile / Touch ─────────────────────────────────────── */
 
 /* Evitar que el browser intercepte gestos sobre los canvases */
