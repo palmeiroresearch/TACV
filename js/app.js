@@ -84,13 +84,46 @@
     console.log(`TAC Viewer v${APP_VERSION} — listo`);
 })();
 
-/* ── Cargar archivos DICOM ──────────────────────────────── */
+/* ── Activar frames ya parseados (sin I/O ni parsing) ─── */
+function activateFrames(allFrames) {
+    if (!allFrames?.length) {
+        UI.showToast('No se encontraron frames DICOM válidos', 'error');
+        return -1;
+    }
+    document.getElementById('welcomeScreen')?.remove();
+
+    const byUID = new Map();
+    allFrames.forEach(frame => {
+        const uid = frame.allTags?.['x0020000e'] || 'default';
+        if (!byUID.has(uid)) byUID.set(uid, []);
+        byUID.get(uid).push(frame);
+    });
+
+    let firstSeriesIdx = -1;
+    byUID.forEach((frames) => {
+        const idx = SeriesManager.add(frames);   // add() ignora duplicados por SeriesInstanceUID
+        if (firstSeriesIdx === -1) firstSeriesIdx = idx;
+    });
+
+    SeriesManager.renderTabs();
+    _activateSeries(firstSeriesIdx === -1 ? 0 : firstSeriesIdx);
+
+    const total      = allFrames.length;
+    const seriesCount = byUID.size;
+    UI.showToast(
+        `${total} imágenes${seriesCount > 1 ? ` en ${seriesCount} series` : ''} — ${allFrames[0].patientName || ''}`,
+        'success', 3500
+    );
+    return firstSeriesIdx;
+}
+
+/* ── Cargar archivos DICOM (desde disco) ────────────────── */
 async function loadFiles(files) {
     document.getElementById('welcomeScreen')?.remove();
     UI.showLoadingBar();
 
     const allFrames = await DicomLoader.loadFiles(files, {
-        onProgress: (loaded, total) => UI.updateLoadingBar(loaded, total),
+        onProgress:   (loaded, total) => UI.updateLoadingBar(loaded, total),
         onFrameLoaded: (frame, idx) => {
             if (idx === 0) {
                 const vp = ViewportLayout.getActive();
@@ -100,38 +133,7 @@ async function loadFiles(files) {
     });
 
     UI.hideLoadingBar();
-
-    if (!allFrames?.length) {
-        UI.showToast('No se encontraron frames DICOM válidos', 'error');
-        return;
-    }
-
-    // Agrupar por SeriesInstanceUID (tag x0020000e)
-    const byUID = new Map();
-    allFrames.forEach(frame => {
-        const uid = frame.allTags?.['x0020000e'] || 'default';
-        if (!byUID.has(uid)) byUID.set(uid, []);
-        byUID.get(uid).push(frame);
-    });
-
-    // Añadir cada serie al SeriesManager
-    let firstSeriesIdx = -1;
-    byUID.forEach((frames, uid) => {
-        const idx = SeriesManager.add(frames);
-        if (firstSeriesIdx === -1) firstSeriesIdx = idx;
-    });
-
-    SeriesManager.renderTabs();
-
-    // Cargar la primera serie nueva
-    _activateSeries(firstSeriesIdx === -1 ? 0 : firstSeriesIdx);
-
-    const total = allFrames.length;
-    const seriesCount = byUID.size;
-    UI.showToast(
-        `${total} imágenes cargadas${seriesCount > 1 ? ` en ${seriesCount} series` : ''} — ${allFrames[0].patientName || ''}`,
-        'success', 4000
-    );
+    activateFrames(allFrames);
 }
 
 /* ── Activar una serie por índice en SeriesManager ─────── */

@@ -11,9 +11,28 @@
 
 const CaseLibrary = (() => {
 
-    let _index    = [];     // [{folderName, patientName, studyDate, studyDateFmt, seriesDesc, sliceCount, _handle?}]
-    let _rootDir  = null;   // FileSystemDirectoryHandle (FSA, in-memory + IDB)
-    let _sesFiles = null;   // Map<folderName, File[]> (webkitdirectory, session only)
+    let _index         = [];   // [{folderName, patientName, studyDate, studyDateFmt, seriesDesc, sliceCount, _handle?}]
+    let _rootDir       = null; // FileSystemDirectoryHandle con permiso confirmado esta sesión
+    let _storedHandle  = null; // Handle restaurado de IDB, permiso pendiente de confirmar
+    let _sesFiles      = null; // Map<folderName, File[]> (webkitdirectory, session only)
+
+    // Cache LRU de frames ya parseados — evita re-leer disco y re-parsear DICOM
+    const CACHE_MAX  = 5;
+    const _frameCache = new Map();  // folderName → DicomFrame[] (insertion order = LRU)
+
+    function _cacheGet(key) {
+        if (!_frameCache.has(key)) return null;
+        const v = _frameCache.get(key);          // promover a MRU: re-insertar al final
+        _frameCache.delete(key); _frameCache.set(key, v);
+        return v;
+    }
+    function _cacheSet(key, frames) {
+        _frameCache.delete(key);                 // re-insertar al final si ya existe
+        if (_frameCache.size >= CACHE_MAX) {     // evictar el más antiguo (first entry)
+            _frameCache.delete(_frameCache.keys().next().value);
+        }
+        _frameCache.set(key, frames);
+    }
 
     /* ── Init ─────────────────────────────────────────── */
     function init() {
@@ -32,6 +51,16 @@ const CaseLibrary = (() => {
 
         Storage.loadLibraryIndex().then(cached => {
             if (cached?.length) { _index = cached; _renderList(''); }
+        });
+
+        // Restaurar handle de sesión anterior — si ya tiene permiso, listo; si no, se pide al cargar
+        Storage.loadRootHandle().then(async (handle) => {
+            if (!handle) return;
+            try {
+                const perm = await handle.queryPermission({ mode: 'read' });
+                if (perm === 'granted') _rootDir = handle;
+                else                    _storedHandle = handle;
+            } catch { _storedHandle = handle; }
         });
     }
 
@@ -70,14 +99,15 @@ const CaseLibrary = (() => {
     async function _refresh() {
         if (_rootDir) { await _indexFromDirHandle(_rootDir); return; }
 
-        const stored = await Storage.loadRootHandle();
-        if (stored) {
+        const candidate = _storedHandle || await Storage.loadRootHandle();
+        if (candidate) {
             try {
-                let perm = await stored.queryPermission({ mode: 'read' });
-                if (perm !== 'granted') perm = await stored.requestPermission({ mode: 'read' });
+                let perm = await candidate.queryPermission({ mode: 'read' });
+                if (perm !== 'granted') perm = await candidate.requestPermission({ mode: 'read' });
                 if (perm === 'granted') {
-                    _rootDir = stored;
-                    await _indexFromDirHandle(stored);
+                    _rootDir = candidate;
+                    _storedHandle = null;
+                    await _indexFromDirHandle(_rootDir);
                     return;
                 }
             } catch {}
@@ -180,6 +210,15 @@ const CaseLibrary = (() => {
     /* ── Cargar caso en el viewer ─────────────────────── */
     async function _loadCase(entry) {
         close();
+
+        // ── Cache hit: 0 I/O, 0 parsing, activación instantánea ──
+        const cached = _cacheGet(entry.folderName);
+        if (cached) {
+            activateFrames(cached);  // función global en app.js (no re-parsea)
+            return;
+        }
+
+        // ── Cache miss: colectar File[] ───────────────────────────
         let files = null;
 
         if (entry._handle) {
@@ -190,15 +229,38 @@ const CaseLibrary = (() => {
         } else if (_sesFiles?.has(entry.folderName)) {
             files = _sesFiles.get(entry.folderName);
         } else if (_rootDir) {
-            // Recolectar desde el handle raíz usando el folderName guardado
             try { files = await _collectFromRoot(_rootDir, entry.folderName); } catch {}
+        } else if (_storedHandle) {
+            try {
+                const perm = await _storedHandle.requestPermission({ mode: 'read' });
+                if (perm === 'granted') {
+                    _rootDir = _storedHandle;
+                    _storedHandle = null;
+                    files = await _collectFromRoot(_rootDir, entry.folderName);
+                }
+            } catch {}
         }
 
         if (!files?.length) {
-            UI.showToast('Reindexe la biblioteca para cargar este caso', 'warning');
+            UI.showToast('Sin acceso a los archivos — usa el botón Reindexar (⟳)', 'warning');
             return;
         }
-        await loadFiles(files);  // función global en app.js
+
+        // ── Parsear, cachear y activar ────────────────────────────
+        document.getElementById('welcomeScreen')?.remove();
+        UI.showLoadingBar();
+
+        const allFrames = await DicomLoader.loadFiles(files, {
+            onProgress:    (loaded, total) => UI.updateLoadingBar(loaded, total),
+            onFrameLoaded: (frame, idx) => {
+                if (idx === 0) { const vp = ViewportLayout.getActive(); if (vp) vp.loadFrame(frame, 0, 1); }
+            },
+        });
+
+        UI.hideLoadingBar();
+
+        if (allFrames?.length) _cacheSet(entry.folderName, allFrames);
+        activateFrames(allFrames);
     }
 
     async function _collectFromRoot(rootHandle, folderName) {
