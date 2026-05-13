@@ -70,55 +70,7 @@
     background: var(--bg-app);
 }
 
-/* ── Cine controls ───────────────────────────────────────── */
-#cineControls {
-    padding: 6px 4px;
-    border-top: 1px solid var(--border);
-    display: flex; flex-direction: column; gap: 4px;
-    background: var(--toolbar-bg);
-}
-
-#cineControls > div:first-of-type {
-    display: flex; justify-content: center; gap: 4px;
-}
-
-#cinePrev, #cinePlay, #cineNext {
-    width: 26px; height: 26px;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--bg-secondary);
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    font-size: 12px;
-    transition: all var(--fast);
-}
-#cinePrev:hover, #cineNext:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-#cinePlay { background: rgba(120,218,171,0.15); color: var(--brand-accent); }
-#cinePlay:hover { background: rgba(120,218,171,0.25); }
-#cinePlay.playing { color: var(--warning); background: rgba(245,158,11,0.12); }
-
-.cine-fps-row {
-    display: flex; align-items: center; gap: 4px;
-    padding: 0 2px;
-}
-
-#cineFps {
-    flex: 1;
-    -webkit-appearance: none;
-    height: 3px; border-radius: 99px;
-    background: var(--bg-tertiary);
-    outline: none; cursor: pointer;
-}
-#cineFps::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    background: var(--brand-accent);
-    cursor: pointer;
-}
-#cineFpsLabel {
-    font-size: 10px; font-weight: 600;
-    color: var(--text-tertiary); white-space: nowrap; min-width: 32px;
-}
+/* Cine controls movidos al status bar — ver layout.css .status-cine */
 
 /* ── Series tab bar (multi-serie) ───────────────────────── */
 .series-tab-bar {

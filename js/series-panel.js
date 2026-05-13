@@ -160,7 +160,8 @@ const SeriesPanel = {
 
     setFps(fps) {
         this._cineFps = fps;
-        document.getElementById('cineFpsLabel').textContent = `${fps} fps`;
+        const fpsEl = document.getElementById('cineFps');
+        if (fpsEl) fpsEl.value = fps;
         if (this._cineInterval) { this.stopCine(); this.startCine(); }
     },
 

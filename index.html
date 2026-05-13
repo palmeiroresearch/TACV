@@ -205,15 +205,6 @@
     <!-- SERIES PANEL (thumbnail strip) -->
     <aside id="seriesPanel">
         <div id="thumbnailStrip"></div>
-        <div id="cineControls">
-            <button id="cinePrev" title="Frame anterior">⏮</button>
-            <button id="cinePlay" title="Reproducir / Pausar">▶</button>
-            <button id="cineNext" title="Frame siguiente">⏭</button>
-            <div class="cine-fps-row">
-                <input type="range" id="cineFps" min="1" max="24" value="8">
-                <span id="cineFpsLabel">8 fps</span>
-            </div>
-        </div>
         <!-- Slice counter -->
         <div id="sliceCounter" class="hidden">0 / 0</div>
     </aside>
@@ -493,6 +484,20 @@
 
 <!-- STATUS BAR -->
 <footer id="statusBar">
+    <!-- Cine playback — inline junto al slice counter -->
+    <div class="status-cine">
+        <button id="cinePrev" title="Frame anterior">⏮</button>
+        <button id="cinePlay" title="Reproducir / Pausar">▶</button>
+        <button id="cineNext" title="Frame siguiente">⏭</button>
+        <select id="cineFps" title="Velocidad de reproducción">
+            <option value="4">4 fps</option>
+            <option value="8" selected>8 fps</option>
+            <option value="12">12 fps</option>
+            <option value="16">16 fps</option>
+            <option value="24">24 fps</option>
+        </select>
+    </div>
+    <span class="status-sep">|</span>
     <span id="statusSlice">Slice: —</span>
     <span class="status-sep">|</span>
     <span id="statusHU">HU: —</span>

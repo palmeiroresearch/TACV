@@ -5,12 +5,12 @@
    ============================================================ */
 
 (async function init() {
-    // Banner informativo en iOS/mobile (antes de todo lo demás)
+    // Banner informativo en iOS — fixed sobre el status bar, no afecta el grid
     if (typeof Capabilities !== 'undefined' && Capabilities.isIOS) {
         const banner = document.createElement('div');
         banner.className = 'caps-warning';
-        banner.textContent = 'Modo iPad/iOS — MPR y filtros avanzados desactivados · W/L: seleccionar herramienta W y arrastrar';
-        document.getElementById('appShell')?.prepend(banner);
+        banner.textContent = 'iPad/iOS: MPR y filtros avanzados desactivados · W/L: herramienta W + arrastrar';
+        document.body.appendChild(banner);
     }
 
     // Storage + session ID
@@ -22,7 +22,7 @@
     // Layout inicial
     ViewportLayout.init('1x1');
 
-    // Metadata panel
+    // Metadata panel — la lógica de collapse en táctiles está en MetadataPanel.init()
     MetadataPanel.init();
 
     // Measurements panel

@@ -62,7 +62,7 @@ const MetadataPanel = {
     /* ── Init (bindings) ─────────────────────────────── */
     init() {
         const searchInput = document.getElementById('metaSearch');
-        searchInput.addEventListener('input', (e) => {
+        searchInput?.addEventListener('input', (e) => {
             if (this._currentFrame) {
                 this._renderTagList(this._currentFrame.allTags || {}, e.target.value);
             }
@@ -70,19 +70,29 @@ const MetadataPanel = {
 
         const toggle = document.getElementById('metaToggle');
         const panel  = document.getElementById('metadataPanel');
-        toggle.addEventListener('click', () => {
-            panel.classList.add('collapsed');
-            Storage.setSetting('metaPanelOpen', false);
+        if (!toggle || !panel) return;
+
+        const setCollapsed = (collapsed) => {
+            panel.classList.toggle('collapsed', collapsed);
+            toggle.textContent = collapsed ? '❯' : '✕';
+            toggle.title = collapsed ? 'Abrir panel Info DICOM' : 'Cerrar panel';
+            Storage.setSetting('metaPanelOpen', !collapsed);
+        };
+
+        // Botón toggle: stopPropagation evita que el click suba al panel click listener
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setCollapsed(!panel.classList.contains('collapsed'));
         });
 
+        // Click en el panel colapsado → reabrir (ya no hay conflicto gracias al stopPropagation)
         panel.addEventListener('click', () => {
-            if (panel.classList.contains('collapsed')) {
-                panel.classList.remove('collapsed');
-                Storage.setSetting('metaPanelOpen', true);
-            }
+            if (panel.classList.contains('collapsed')) setCollapsed(false);
         });
 
-        // Restaurar estado colapsado
-        if (!Storage.getSetting('metaPanelOpen')) panel.classList.add('collapsed');
+        // En táctiles arrancar siempre colapsado; en PC respetar localStorage
+        const isTouch = typeof Capabilities !== 'undefined' && Capabilities.isTouch;
+        const shouldCollapse = isTouch ? true : !Storage.getSetting('metaPanelOpen');
+        setCollapsed(shouldCollapse);
     },
 };

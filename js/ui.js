@@ -135,7 +135,7 @@ const UI = {
         document.getElementById('cinePlay')?.addEventListener('click', () => SeriesPanel.toggleCine());
         document.getElementById('cinePrev')?.addEventListener('click', () => SeriesPanel.navigateDelta(-1));
         document.getElementById('cineNext')?.addEventListener('click', () => SeriesPanel.navigateDelta(1));
-        document.getElementById('cineFps')?.addEventListener('input', (e) => SeriesPanel.setFps(parseInt(e.target.value)));
+        document.getElementById('cineFps')?.addEventListener('change', (e) => SeriesPanel.setFps(parseInt(e.target.value)));
 
         // Help modal
         this._wireHelpModal();
@@ -494,6 +494,5 @@ const UI = {
         const fps = settings.cineFps || 8;
         const fpsEl = document.getElementById('cineFps');
         if (fpsEl) fpsEl.value = fps;
-        document.getElementById('cineFpsLabel').textContent = `${fps} fps`;
     },
 };
