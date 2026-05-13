@@ -2,7 +2,7 @@
 
 const Storage = {
     DB_NAME: 'TACViewerDB',
-    DB_VERSION: 2,
+    DB_VERSION: 3,
     _db: null,
 
     /* ── IndexedDB init ────────────────────────────────── */
@@ -20,6 +20,10 @@ const Storage = {
                 }
                 if (!db.objectStoreNames.contains('library')) {
                     db.createObjectStore('library', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('frameCache')) {
+                    const fc = db.createObjectStore('frameCache', { keyPath: 'id' });
+                    fc.createIndex('savedAt', 'savedAt');
                 }
             };
             req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
@@ -141,6 +145,64 @@ const Storage = {
                 req.onerror   = () => resolve(null);
             } catch { resolve(null); }
         });
+    },
+
+    /* ── Frame cache persistente (sobrevive cierres del browser) ── */
+    // Guarda hasta FRAME_CACHE_MAX casos parseados en IDB.
+    // Int16Array (pixel data) se serializa nativamente via structured clone.
+    FRAME_CACHE_MAX: 5,
+
+    async saveFrameCache(folderName, frames) {
+        await this.initDB();
+        // Serializar sin pixelData del worker ya que está como Int16Array directo
+        const serialized = frames.map(f => ({ ...f }));
+        return new Promise((resolve) => {
+            try {
+                const req = this._tx('frameCache', 'readwrite')
+                    .put({ id: folderName, frames: serialized, savedAt: Date.now() });
+                req.onsuccess = () => { this._evictFrameCache(); resolve(); };
+                req.onerror   = () => resolve();
+            } catch { resolve(); }
+        });
+    },
+
+    async loadFrameCache(folderName) {
+        await this.initDB();
+        return new Promise((resolve) => {
+            try {
+                const req = this._tx('frameCache').get(folderName);
+                req.onsuccess = () => {
+                    const data = req.result?.frames;
+                    if (!data) { resolve(null); return; }
+                    // pixelData puede llegar como ArrayBuffer si IDB lo convirtió
+                    const frames = data.map(f => ({
+                        ...f,
+                        pixelData: f.pixelData instanceof Int16Array
+                            ? f.pixelData
+                            : new Int16Array(f.pixelData),
+                    }));
+                    resolve(frames);
+                };
+                req.onerror = () => resolve(null);
+            } catch { resolve(null); }
+        });
+    },
+
+    _evictFrameCache() {
+        try {
+            const store = this._tx('frameCache', 'readwrite');
+            const idx   = store.index('savedAt');
+            const entries = [];
+            idx.openCursor().onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) { entries.push(cursor.key); cursor.continue(); }
+                else {
+                    // entries ordenados por savedAt asc — borrar los más viejos
+                    const excess = entries.length - this.FRAME_CACHE_MAX;
+                    for (let i = 0; i < excess; i++) store.delete(entries[i]);
+                }
+            };
+        } catch {}
     },
 
     /* ── Custom events ─────────────────────────────────── */

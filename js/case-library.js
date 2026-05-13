@@ -211,14 +211,23 @@ const CaseLibrary = (() => {
     async function _loadCase(entry) {
         close();
 
-        // ── Cache hit: 0 I/O, 0 parsing, activación instantánea ──
+        // ── 1. In-memory cache: instantáneo ──────────────────────
         const cached = _cacheGet(entry.folderName);
         if (cached) {
-            activateFrames(cached);  // función global en app.js (no re-parsea)
+            activateFrames(cached);
             return;
         }
 
-        // ── Cache miss: colectar File[] ───────────────────────────
+        // ── 2. IDB frame cache: sin permisos de archivo ───────────
+        //    Persiste entre sesiones → resuelve el problema mobile
+        const idbFrames = await Storage.loadFrameCache(entry.folderName);
+        if (idbFrames) {
+            _cacheSet(entry.folderName, idbFrames);   // calentar in-memory también
+            activateFrames(idbFrames);
+            return;
+        }
+
+        // ── 3. Cache miss: colectar File[] ───────────────────────
         let files = null;
 
         if (entry._handle) {
@@ -259,7 +268,10 @@ const CaseLibrary = (() => {
 
         UI.hideLoadingBar();
 
-        if (allFrames?.length) _cacheSet(entry.folderName, allFrames);
+        if (allFrames?.length) {
+            _cacheSet(entry.folderName, allFrames);
+            Storage.saveFrameCache(entry.folderName, allFrames);  // persiste entre sesiones
+        }
         activateFrames(allFrames);
     }
 
