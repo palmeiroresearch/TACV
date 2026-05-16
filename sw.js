@@ -9,7 +9,7 @@
    - Message: SKIP_WAITING para activar update aprobado por usuario
    ============================================================ */
 
-const CACHE_VERSION = 'v1.2.7';
+const CACHE_VERSION = 'v1.3.0';
 const CACHE_NAME    = `tac-viewer-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -19,6 +19,9 @@ const ASSETS = [
     /* ── Librerías externas ── */
     './lib/dicom-parser.min.js',
     './lib/pako.min.js',
+    /* ── Fuentes self-hosted ── */
+    './css/fonts/inter-latin.woff2',
+    './css/fonts/inter-latin-ext.woff2',
     /* ── CSS ── */
     './css/main.css',
     './css/layout.css',
