@@ -161,6 +161,38 @@
     box-shadow: 0 0 0 1px rgba(120,218,171,0.3);
 }
 
+/* ── Botón Multi-window RGB ──────────────────────────────── */
+.btn-multiwin {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    background: linear-gradient(135deg,
+        rgba(239,68,68,0.15) 0%,
+        rgba(34,197,94,0.15) 50%,
+        rgba(59,130,246,0.15) 100%);
+}
+.btn-multiwin.on {
+    background: linear-gradient(135deg,
+        rgba(239,68,68,0.35) 0%,
+        rgba(34,197,94,0.35) 50%,
+        rgba(59,130,246,0.35) 100%);
+    box-shadow: 0 0 0 1px rgba(120,218,171,0.3);
+    color: var(--text-primary);
+}
+
+/* ── Botón TV ────────────────────────────────────────────── */
+.btn-tv {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+}
+.btn-tv.on {
+    background: rgba(59,130,246,0.18);
+    color: #60a5fa;
+    box-shadow: 0 0 0 1px rgba(59,130,246,0.3);
+}
+
 /* ── Botón SR — badge experimental ──────────────────────── */
 .btn-superres {
     font-size: 11px;
@@ -176,6 +208,116 @@
     color: var(--warning);
     line-height: 1; pointer-events: none;
 }
+
+/* ── Ocultar botones de toolbar (customizer) ────────────── */
+.toolbar-btn-hidden {
+    display: none !important;
+}
+
+/* ── Toolbar Customizer Panel ────────────────────────────── */
+#toolbarCustomizer {
+    position: fixed;
+    z-index: 500;
+    width: 230px;
+    background: var(--bg-app);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    max-height: 520px;
+    overflow: hidden;
+}
+#toolbarCustomizer.hidden { display: none; }
+
+.tc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.tc-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.tc-close {
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    font-size: 11px;
+    transition: all var(--fast);
+}
+.tc-close:hover { background: var(--bg-secondary); color: var(--text-primary); }
+
+.tc-body {
+    overflow-y: auto;
+    padding: 6px 0;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+.tc-body::-webkit-scrollbar { width: 4px; }
+.tc-body::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+.tc-group { padding: 6px 12px; }
+.tc-group + .tc-group {
+    border-top: 1px solid var(--border);
+    padding-top: 6px;
+}
+.tc-group-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brand-accent);
+    margin-bottom: 3px;
+    opacity: 0.7;
+}
+.tc-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 4px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--fast);
+    font-size: 11px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.tc-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
+.tc-item input[type="checkbox"] {
+    accent-color: var(--brand-accent);
+    width: 13px; height: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.tc-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.tc-reset-btn {
+    width: 100%;
+    padding: 5px 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--fast);
+    text-align: center;
+}
+.tc-reset-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 
 /* ── Loading progress bar ───────────────────────────────── */
 #loadingBar {

@@ -75,6 +75,14 @@ class RendererGL {
             superRes:   gl.getUniformLocation(p, 'u_superRes'),
             texSize:    gl.getUniformLocation(p, 'u_texSize'),
             toFbo:      gl.getUniformLocation(p, 'u_toFbo'),
+            multiWin:   gl.getUniformLocation(p, 'u_multiWin'),
+            mwRMin:     gl.getUniformLocation(p, 'u_mwRMin'),
+            mwRMax:     gl.getUniformLocation(p, 'u_mwRMax'),
+            mwGMin:     gl.getUniformLocation(p, 'u_mwGMin'),
+            mwGMax:     gl.getUniformLocation(p, 'u_mwGMax'),
+            mwBMin:     gl.getUniformLocation(p, 'u_mwBMin'),
+            mwBMax:     gl.getUniformLocation(p, 'u_mwBMax'),
+            mwStrength: gl.getUniformLocation(p, 'u_mwStrength'),
         };
 
         // Textura de pixels (slot 0)
@@ -196,6 +204,19 @@ class RendererGL {
         gl.uniform1i(this._uniforms.superRes,  state.isSuperResEnabled ? 1 : 0);
         // Cuando va a FBO: deshabilitar colormap para que FRAG_CT emita grises puros
         gl.uniform1i(this._uniforms.toFbo, filtersActive ? 1 : 0);
+        // Multi-window RGB blending (Brain/Stroke/Subdural — Karki et al.)
+        const mw = state.isMultiWindowEnabled;
+        gl.uniform1i(this._uniforms.multiWin,   mw ? 1 : 0);
+        if (mw) {
+            const s = state.multiWindowStrength ?? 0.85;
+            gl.uniform1f(this._uniforms.mwRMin,    -5.0);   // Brain WL35 WW80
+            gl.uniform1f(this._uniforms.mwRMax,    75.0);
+            gl.uniform1f(this._uniforms.mwGMin,    28.0);   // Stroke WL32 WW8
+            gl.uniform1f(this._uniforms.mwGMax,    36.0);
+            gl.uniform1f(this._uniforms.mwBMin,   -32.5);   // Subdural WL75 WW215
+            gl.uniform1f(this._uniforms.mwBMax,   182.5);
+            gl.uniform1f(this._uniforms.mwStrength, s);
+        }
         gl.uniform2f(this._uniforms.texSize, frame.cols, frame.rows);
 
         const mat = this._buildTransform(frame, state);

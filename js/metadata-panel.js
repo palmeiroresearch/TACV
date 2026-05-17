@@ -30,33 +30,32 @@ const MetadataPanel = {
 
     _renderTagList(allTags, filter) {
         const el = document.getElementById('metaTagList');
-        el.innerHTML = '';
         const lf = filter.toLowerCase();
-
         const knownTags = DICOM_TAGS;
 
-        // Tags conocidos primero, luego el resto
         const keys = Object.keys(allTags).sort((a, b) => {
-            const aKnown = !!knownTags[a], bKnown = !!knownTags[b];
-            if (aKnown && !bKnown) return -1;
-            if (!aKnown && bKnown) return 1;
+            const aK = !!knownTags[a], bK = !!knownTags[b];
+            if (aK && !bK) return -1;
+            if (!aK && bK) return 1;
             return a.localeCompare(b);
         });
 
+        // Batch via innerHTML — evita reflow por cada tag
+        const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        const html = [];
         for (const tag of keys) {
             const val  = allTags[tag] || '';
             const name = knownTags[tag] || '';
             if (lf && !name.toLowerCase().includes(lf) && !tag.includes(lf) && !val.toLowerCase().includes(lf)) continue;
-
-            const item = document.createElement('div');
-            item.className = 'meta-tag-item';
-            item.innerHTML = `
-                <span class="meta-tag-key">${tag}</span>
-                <span class="meta-tag-val" title="${val}">${val || '—'}</span>
-                ${name ? `<span class="meta-tag-name">${name}</span>` : ''}
-            `;
-            el.appendChild(item);
+            html.push(
+                `<div class="meta-tag-item">` +
+                `<span class="meta-tag-key">${esc(tag)}</span>` +
+                `<span class="meta-tag-val" title="${esc(val)}">${esc(val) || '—'}</span>` +
+                (name ? `<span class="meta-tag-name">${esc(name)}</span>` : '') +
+                `</div>`
+            );
         }
+        el.innerHTML = html.join('');
     },
 
     /* ── Init (bindings) ─────────────────────────────── */

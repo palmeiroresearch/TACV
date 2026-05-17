@@ -106,8 +106,10 @@ const UI = {
         });
         document.getElementById('btnRotCW')?.addEventListener('click', () => ViewportLayout.getActive()?.rotateCW());
         document.getElementById('btnRotCCW')?.addEventListener('click', () => ViewportLayout.getActive()?.rotateCCW());
-        document.getElementById('btnInvert')?.addEventListener('click',    () => ViewportLayout.getActive()?.toggleInvert());
-        document.getElementById('btnSuperRes')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleSuperRes());
+        document.getElementById('btnInvert')?.addEventListener('click',       () => ViewportLayout.getActive()?.toggleInvert());
+        document.getElementById('btnSuperRes')?.addEventListener('click',     () => ViewportLayout.getActive()?.toggleSuperRes());
+        document.getElementById('btnMultiWindow')?.addEventListener('click',  () => ViewportLayout.getActive()?.toggleMultiWindow());
+        document.getElementById('btnTV')?.addEventListener('click',          () => ViewportLayout.getActive()?.toggleTV());
         document.getElementById('btnAnonymize')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleAnonymize());
         document.getElementById('btnAbMode')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleAbMode());
 
@@ -136,6 +138,9 @@ const UI = {
         document.getElementById('cinePrev')?.addEventListener('click', () => SeriesPanel.navigateDelta(-1));
         document.getElementById('cineNext')?.addEventListener('click', () => SeriesPanel.navigateDelta(1));
         document.getElementById('cineFps')?.addEventListener('change', (e) => SeriesPanel.setFps(parseInt(e.target.value)));
+
+        // Toolbar customizer
+        this._wireToolbarCustomizer();
 
         // Case library
         document.getElementById('btnCaseLibrary')?.addEventListener('click', () => CaseLibrary.toggle());
@@ -511,6 +516,73 @@ const UI = {
 
         // render() en cada viewport MPR sube lazy la textura a su propio contexto GL
         ViewportLayout.getAll().forEach(vp => vp.render());
+    },
+
+    /* ── Toolbar customizer ─────────────────────────── */
+    _wireToolbarCustomizer() {
+        const panel   = document.getElementById('toolbarCustomizer');
+        const gearBtn = document.getElementById('btnCustomizeToolbar');
+        if (!panel || !gearBtn) return;
+
+        const open = () => {
+            const rect = gearBtn.getBoundingClientRect();
+            panel.style.top   = (rect.bottom + 6) + 'px';
+            panel.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
+            panel.style.left  = 'auto';
+            panel.classList.remove('hidden');
+            gearBtn.classList.add('active');
+        };
+        const close = () => {
+            panel.classList.add('hidden');
+            gearBtn.classList.remove('active');
+        };
+
+        gearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panel.classList.contains('hidden') ? open() : close();
+        });
+        document.getElementById('tcClose')?.addEventListener('click', close);
+        document.addEventListener('click', (e) => {
+            if (!panel.contains(e.target) && e.target !== gearBtn) close();
+        });
+
+        // Aplicar estado guardado
+        const hidden = this._tcGetHidden();
+        this._tcApply(hidden);
+
+        // Sincronizar checkboxes con estado guardado
+        panel.querySelectorAll('input[type="checkbox"][data-cid]').forEach(chk => {
+            chk.checked = !hidden.has(chk.dataset.cid);
+            chk.addEventListener('change', () => {
+                const h = this._tcGetHidden();
+                if (chk.checked) h.delete(chk.dataset.cid);
+                else h.add(chk.dataset.cid);
+                this._tcSave(h);
+                this._tcApply(h);
+            });
+        });
+
+        document.getElementById('btnTcReset')?.addEventListener('click', () => {
+            this._tcSave(new Set());
+            this._tcApply(new Set());
+            panel.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = true);
+            UI.showToast('Barra restablecida', 'success', 2000);
+        });
+    },
+
+    _tcGetHidden() {
+        try { return new Set(JSON.parse(localStorage.getItem('tc-hidden') || '[]')); }
+        catch { return new Set(); }
+    },
+
+    _tcSave(set) {
+        localStorage.setItem('tc-hidden', JSON.stringify([...set]));
+    },
+
+    _tcApply(hidden) {
+        document.querySelectorAll('#toolbar [data-cid]').forEach(el => {
+            el.classList.toggle('toolbar-btn-hidden', hidden.has(el.dataset.cid));
+        });
     },
 
     /* ── Aplicar settings guardados ─────────────────── */

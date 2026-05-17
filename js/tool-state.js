@@ -6,7 +6,7 @@
    ============================================================ */
 
 const ToolState = {
-    _activeTool: TOOL_IDS.WINDOWING,
+    _activeTool: TOOL_IDS.POINTER,
     _activeViewport: null,
     _drag: null,   // { tool, startX, startY, button, data }
 

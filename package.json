@@ -1,0 +1,10 @@
+{
+  "name": "tac-viewer",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

@@ -75,6 +75,15 @@
     display: block;
 }
 
+/* Canvas TV (Total Variation) — entre GL y overlay, nunca intercepta eventos */
+.viewport-cell canvas.tv-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+
 /* Canvas 2D de overlays — encima del WebGL */
 .viewport-cell canvas.overlay-canvas {
     position: absolute; inset: 0;

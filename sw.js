@@ -56,6 +56,7 @@ const ASSETS = [
     './js/measurements-panel.js',
     './js/histogram-panel.js',
     './js/export.js',
+    './js/tv-worker.js',
     './js/case-library.js',
     './js/ui.js',
     './js/app.js',

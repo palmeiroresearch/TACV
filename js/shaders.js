@@ -43,6 +43,15 @@ uniform bool  u_invert;
 uniform bool  u_superRes;   // Super-resolución CT-compatible (PMC10225926)
 uniform vec2  u_texSize;    // vec2(cols, rows) de la textura fuente
 uniform bool  u_toFbo;      // true → emitir grises sin colormap (para PostProcessor)
+// Multi-window RGB blending (Brain/Stroke/Subdural como canales R/G/B)
+uniform bool  u_multiWin;
+uniform float u_mwRMin;   // Brain wMin
+uniform float u_mwRMax;   // Brain wMax
+uniform float u_mwGMin;   // Stroke wMin
+uniform float u_mwGMax;   // Stroke wMax
+uniform float u_mwBMin;   // Subdural wMin
+uniform float u_mwBMax;   // Subdural wMax
+uniform float u_mwStrength; // [0,1] mezcla RGB puro vs grayscale base
 
 // Muestreo seguro de raw Int16 con bounds check
 float sampleRaw(vec2 tc) {
@@ -92,6 +101,21 @@ void main() {
     float hu   = raw * u_slope + u_intercept;
     float gray = clamp((hu - u_wMin) / (u_wMax - u_wMin), 0.0, 1.0);
     if (u_invert) gray = 1.0 - gray;
+
+    // Multi-window RGB: Brain(R) + Stroke(G) + Subdural(B) — Karki et al.
+    if (u_multiWin) {
+        float r = clamp((hu - u_mwRMin) / (u_mwRMax - u_mwRMin), 0.0, 1.0);
+        float g = clamp((hu - u_mwGMin) / (u_mwGMax - u_mwGMin), 0.0, 1.0);
+        float b = clamp((hu - u_mwBMin) / (u_mwBMax - u_mwBMin), 0.0, 1.0);
+        if (u_invert) { r = 1.0-r; g = 1.0-g; b = 1.0-b; }
+        fragColor = vec4(
+            mix(gray, r, u_mwStrength),
+            mix(gray, g, u_mwStrength),
+            mix(gray, b, u_mwStrength),
+            1.0
+        );
+        return;
+    }
 
     // Modo FBO: emitir grises puros para que PostProcessor aplique los filtros
     if (u_toFbo) {

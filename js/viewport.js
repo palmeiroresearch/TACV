@@ -15,6 +15,12 @@ class Viewport {
         this.glCanvas.className = 'gl-canvas';
         cell.appendChild(this.glCanvas);
 
+        // Canvas TV (Total Variation — entre GL y overlay, oculto por defecto)
+        this.tvCanvas = document.createElement('canvas');
+        this.tvCanvas.className = 'tv-canvas hidden';
+        this.tvCtx = this.tvCanvas.getContext('2d');
+        cell.appendChild(this.tvCanvas);
+
         // Canvas 2D (overlays — encima del WebGL)
         this.overlayCanvas = document.createElement('canvas');
         this.overlayCanvas.className = 'overlay-canvas';
@@ -50,10 +56,12 @@ class Viewport {
             rotation:   0,
 
             // Opciones de visualización
-            isInverted:        false,
-            isSuperResEnabled: false,
-            anonymized:        false,
-            colorMapId:        'grayscale',
+            isInverted:          false,
+            isSuperResEnabled:   false,
+            isMultiWindowEnabled: false,
+            multiWindowStrength:  0.85,
+            anonymized:          false,
+            colorMapId:          'grayscale',
 
             // Filtros de post-procesamiento
             bicubicEnabled:    false,
@@ -91,7 +99,16 @@ class Viewport {
             // A/B Comparator
             abMode:   false,
             abSplitX: 0.5,
+
+            // Total Variation denoising (CPU worker, Chambolle 2004)
+            tvEnabled:    false,
+            tvLambda:     0.12,
+            tvIterations: 50,
         };
+
+        this._tvWorker        = null;
+        this._tvBusy          = false;
+        this._tvDenoisedPixels = null;
 
         this._resizeObs = new ResizeObserver(() => this.render());
         this._resizeObs.observe(cell);
@@ -100,6 +117,9 @@ class Viewport {
 
     /* ── Cargar un DicomFrame ──────────────────────────── */
     loadFrame(frame, sliceIndex, totalSlices) {
+        // Limpiar cache TV al cambiar de frame
+        this._tvDenoisedPixels = null;
+        this._tvBusy = false;
         this.state.frame       = frame;
         this.state.sliceIndex  = sliceIndex ?? this.state.sliceIndex;
         this.state.totalSlices = totalSlices ?? this.state.totalSlices;
@@ -110,7 +130,14 @@ class Viewport {
     /* ── Render principal ──────────────────────────────── */
     render() {
         if (!this.renderer) return;
-        this.renderer.render(this.state.frame, this.state);
+
+        // Si TV está activo y hay pixels denoised, renderizar con ellos (mismo pipeline: transforms, colormap)
+        const renderFrame = (this.state.tvEnabled && this._tvDenoisedPixels && this.state.frame)
+            ? { ...this.state.frame, pixelData: this._tvDenoisedPixels,
+                sopInstanceUID: this.state.frame.sopInstanceUID + '_tv' }
+            : this.state.frame;
+
+        this.renderer.render(renderFrame, this.state);
 
         // A/B mode: render clean (no-filter) version to secondary canvas
         if (this.state.abMode) {
@@ -130,6 +157,74 @@ class Viewport {
         if (typeof HistogramPanel !== 'undefined' && this === ViewportLayout.getActive()) {
             HistogramPanel.redraw();
         }
+
+        // TV denoising: lanzar worker si está activo y no hay resultado para el frame actual
+        if (this.state.tvEnabled && this.state.frame && !this._tvBusy && !this._tvDenoisedPixels) {
+            this._triggerTV();
+        }
+    }
+
+    /* ── Total Variation denoising ────────────────────────── */
+    // Opera sobre frame.pixelData (HU raw) → resultado en el pipeline normal de rendering
+    _triggerTV() {
+        const frame = this.state.frame;
+        if (!frame?.pixelData) return;
+
+        if (!this._tvWorker) {
+            this._tvWorker = new Worker('js/tv-worker.js');
+            this._tvWorker.onmessage = (e) => {
+                this._tvBusy = false;
+                if (!this.state.tvEnabled || !this.state.frame) return;
+                const { result, width, height } = e.data;
+
+                // Convertir float [0,1] de vuelta a raw Int16 (inverso del windowing)
+                const f = this.state.frame;
+                const wc  = this.state.windowCenter ?? f.windowCenter;
+                const ww  = this.state.windowWidth  ?? f.windowWidth;
+                const wMin = wc - ww / 2, wMax = wc + ww / 2;
+                const denoised = new Int16Array(width * height);
+                for (let i = 0; i < width * height; i++) {
+                    const hu  = result[i] * (wMax - wMin) + wMin;
+                    const raw = (hu - f.rescaleIntercept) / f.rescaleSlope;
+                    denoised[i] = Math.max(-32768, Math.min(32767, Math.round(raw)));
+                }
+                this._tvDenoisedPixels = denoised;
+
+                // Re-render con los pixels denoised (mismo pipeline: transforms, colormap, etc.)
+                const tvFrame = { ...f, pixelData: denoised, sopInstanceUID: f.sopInstanceUID + '_tv' };
+                this.renderer.render(tvFrame, this.state);
+                OverlayRenderer.render(this);
+            };
+        }
+
+        this._tvBusy = true;
+
+        // Convertir HU a [0,1] usando la ventana actual
+        const wc = this.state.windowCenter ?? frame.windowCenter;
+        const ww = this.state.windowWidth  ?? frame.windowWidth;
+        const wMin = wc - ww / 2, wMax = wc + ww / 2;
+        const N = frame.rows * frame.cols;
+        const float32 = new Float32Array(N);
+        for (let i = 0; i < N; i++) {
+            const hu = frame.pixelData[i] * frame.rescaleSlope + frame.rescaleIntercept;
+            float32[i] = Math.min(1, Math.max(0, (hu - wMin) / (wMax - wMin)));
+        }
+
+        this._tvWorker.postMessage(
+            { float32Data: float32, width: frame.cols, height: frame.rows,
+              lambda: this.state.tvLambda ?? 0.12, iterations: this.state.tvIterations ?? 50 },
+            [float32.buffer]
+        );
+    }
+
+    toggleTV() {
+        this.state.tvEnabled = !this.state.tvEnabled;
+        document.getElementById('btnTV')?.classList.toggle('on', this.state.tvEnabled);
+        if (!this.state.tvEnabled) {
+            this._tvBusy = false;
+            this._tvDenoisedPixels = null;
+        }
+        this.render();
     }
 
     _ensureAbRenderer() {
@@ -233,6 +328,12 @@ class Viewport {
     toggleSuperRes() {
         this.state.isSuperResEnabled = !this.state.isSuperResEnabled;
         document.getElementById('btnSuperRes')?.classList.toggle('on', this.state.isSuperResEnabled);
+        this.render();
+    }
+
+    toggleMultiWindow() {
+        this.state.isMultiWindowEnabled = !this.state.isMultiWindowEnabled;
+        document.getElementById('btnMultiWindow')?.classList.toggle('on', this.state.isMultiWindowEnabled);
         this.render();
     }
 
@@ -428,6 +529,8 @@ class Viewport {
         this.state.frame       = null;
         this.state.sliceIndex  = 0;
         this.state.totalSlices = 0;
+        this._tvBusy = false;
+        this.tvCtx?.clearRect(0, 0, this.tvCanvas.width, this.tvCanvas.height);
         if (this.renderer?.gl) {
             const gl = this.renderer.gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
