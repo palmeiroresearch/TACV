@@ -42,11 +42,12 @@
     UI.applySettings();
 
     // Tool inicial
-    ToolState.setTool(TOOL_IDS.WINDOWING);
+    ToolState.setTool(TOOL_IDS.POINTER);
 
-    // Preset inicial
+    // Preset inicial: restaurar el último usado o usar el predeterminado
+    const savedPreset = Storage.getSettings().activePreset || DEFAULT_PRESET;
     const presetSel = document.getElementById('presetSelect');
-    if (presetSel) presetSel.value = DEFAULT_PRESET;
+    if (presetSel) presetSel.value = savedPreset;
 
     // Keyboard shortcuts globales
     document.addEventListener('keydown', (e) => {
@@ -148,6 +149,9 @@ function _activateSeries(idx) {
     const vp = ViewportLayout.getActive();
     if (vp) {
         vp.loadFrame(series[0], 0, series.length);
+        // Sincronizar W/L con el preset guardado para que select y display coincidan siempre
+        const preset = Storage.getSettings().activePreset || DEFAULT_PRESET;
+        vp.applyPreset(preset);
         vp.fitToWindow();
         vp.render();
     }

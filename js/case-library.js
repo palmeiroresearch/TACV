@@ -11,7 +11,7 @@
 
 const CaseLibrary = (() => {
 
-    let _index         = [];   // [{folderName, patientName, studyDate, studyDateFmt, seriesDesc, sliceCount, _handle?}]
+    let _index         = [];   // [{folderName, patientName, studyDate, studyDateFmt, studyType, seriesDesc, sliceCount, _handle?}]
     let _rootDir       = null; // FileSystemDirectoryHandle con permiso confirmado esta sesión
     let _storedHandle  = null; // Handle restaurado de IDB, permiso pendiente de confirmar
     let _sesFiles      = null; // Map<folderName, File[]> (webkitdirectory, session only)
@@ -50,7 +50,14 @@ const CaseLibrary = (() => {
         });
 
         Storage.loadLibraryIndex().then(cached => {
-            if (cached?.length) { _index = cached; _renderList(''); }
+            if (cached?.length) {
+                _index = cached;
+                _renderList('');
+                // Si el índice no tiene studyType, necesita reindexación
+                if (cached[0] && cached[0].studyType === undefined) {
+                    UI.showToast('Reindexar para ver tipo de estudio (botón ⟳)', 'info', 5000);
+                }
+            }
         });
 
         // Restaurar handle de sesión anterior — si ya tiene permiso, listo; si no, se pide al cargar
@@ -316,7 +323,8 @@ const CaseLibrary = (() => {
             ? _index.filter(e =>
                 e.patientName.toLowerCase().includes(q) ||
                 e.studyDateFmt.includes(q) ||
-                e.studyDate.includes(q))
+                e.studyDate.includes(q) ||
+                e.studyType.toLowerCase().includes(q))
             : _index;
 
         if (count) {
@@ -334,7 +342,8 @@ const CaseLibrary = (() => {
             <div class="cl-case">
                 <div class="cl-case-info">
                     <div class="cl-case-name">${_esc(e.patientName)}</div>
-                    <div class="cl-case-meta">${e.studyDateFmt || '—'}${e.seriesDesc ? ' · ' + _esc(e.seriesDesc) : ''} · ${e.sliceCount} sl</div>
+                    ${e.studyType ? `<div class="cl-case-type">${_esc(e.studyType)}</div>` : ''}
+                    <div class="cl-case-meta">${e.studyDateFmt || '—'} · ${e.sliceCount} sl</div>
                 </div>
                 <button class="cl-case-open">Abrir</button>
             </div>`).join('');
@@ -367,9 +376,10 @@ const CaseLibrary = (() => {
             patientName:  _fmtName(meta?.patientName || folderName),
             studyDate:    meta?.studyDate || '',
             studyDateFmt: _fmtDate(meta?.studyDate || ''),
+            studyType:    _fmtStudyType(meta?.studyDesc, meta?.bodyPart, meta?.modality),
             seriesDesc:   meta?.seriesDesc || '',
             sliceCount,
-            _handle: handle,  // FileSystemDirectoryHandle (in-memory solo, no serializable)
+            _handle: handle,
         };
     }
 
@@ -378,6 +388,16 @@ const CaseLibrary = (() => {
         // Persistir solo datos serializables (sin _handle)
         Storage.saveLibraryIndex(_index.map(({ _handle, ...rest }) => rest));
         _renderList(document.getElementById('clSearch')?.value || '');
+    }
+
+    function _fmtStudyType(studyDesc, bodyPart, modality) {
+        // Prioridad: Study Description > Body Part Examined
+        const raw = (studyDesc || bodyPart || '').trim();
+        if (!raw) return '';
+        // Normalizar a Title Case limpio
+        return raw.split(/\s+/)
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(' ');
     }
 
     function _fmtName(dicomPN) {

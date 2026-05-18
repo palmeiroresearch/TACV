@@ -310,6 +310,7 @@ class Viewport {
         this.state.windowCenter = p.center;
         const sel = document.getElementById('presetSelect');
         if (sel) sel.value = presetId;
+        Storage.setSetting('activePreset', presetId);
         this._updateStatusBar();
         this.render();
     }

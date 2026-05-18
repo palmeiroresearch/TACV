@@ -58,23 +58,37 @@ ToolHandlers[TOOL_IDS.TEXT] = {
             z-index: 9000;
         `;
 
-        const finish = () => {
+        let done = false;
+        const finish = (save = true) => {
+            if (done) return;
+            done = true;
+            document.removeEventListener('mousedown', onOutside, true);
             const text = input.value.trim();
             input.remove();
-            if (!text) return;
+            if (!save || !text) return;
             MeasurementStore.add(viewport.state.sliceIndex, {
                 type: 'text', pos: imgPos, text,
             });
             viewport.render();
         };
 
+        const onOutside = (e) => {
+            if (e.target !== input) finish(true);
+        };
+
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter')  finish();
-            if (e.key === 'Escape') input.remove();
+            e.stopPropagation();
+            if (e.key === 'Enter')  { e.preventDefault(); finish(true); }
+            if (e.key === 'Escape') finish(false);
         });
-        input.addEventListener('blur', finish);
 
         document.body.appendChild(input);
-        input.focus();
+
+        // Diferir focus y handler de click externo un tick para que el mousedown
+        // actual no dispare onOutside ni robe el foco de vuelta al canvas
+        setTimeout(() => {
+            input.focus();
+            document.addEventListener('mousedown', onOutside, true);
+        }, 0);
     },
 };

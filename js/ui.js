@@ -56,6 +56,7 @@ const UI = {
         // Windowing preset select
         document.getElementById('presetSelect')?.addEventListener('change', (e) => {
             ViewportLayout.getActive()?.applyPreset(e.target.value);
+            Storage.setSetting('activePreset', e.target.value);
         });
 
         // Color maps

@@ -170,7 +170,10 @@ const DicomBridge = {
             return {
                 patientName: s('x00100010') || '',
                 studyDate:   s('x00080020') || '',
-                seriesDesc:  s('x0008103e') || s('x00081030') || '',
+                studyDesc:   s('x00081030') || '',
+                seriesDesc:  s('x0008103e') || '',
+                bodyPart:    s('x00180015') || '',
+                modality:    s('x00080060') || '',
             };
         } catch { return null; }
     },

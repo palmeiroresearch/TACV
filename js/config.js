@@ -10,6 +10,7 @@ const WINDOWING_PRESETS = {
     softTissue:  { width: 400,  center: 50,   label: 'Tejido blando' },
     lung:        { width: 1500, center: -600, label: 'Pulmón' },
     subdural:    { width: 200,  center: 75,   label: 'Subdural' },
+    hemorrhage:  { width: 100,  center: 50,   label: 'Hemorragia IC' },
     stroke:      { width: 40,   center: 40,   label: 'Stroke' },
     temporal:    { width: 2800, center: 600,  label: 'Temporal' },
 };

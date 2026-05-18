@@ -586,8 +586,19 @@ kbd.shortcut-key {
     color: var(--text-primary);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.cl-case-type {
+    display: inline-block;
+    margin-top: 3px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+    color: var(--brand-accent);
+    background: rgba(120,218,171,0.1);
+    border: 1px solid rgba(120,218,171,0.2);
+    border-radius: 3px;
+    padding: 1px 6px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .cl-case-meta {
-    font-size: 11px; color: var(--text-tertiary); margin-top: 2px;
+    font-size: 11px; color: var(--text-tertiary); margin-top: 3px;
 }
 .cl-case-open {
     flex-shrink: 0;
