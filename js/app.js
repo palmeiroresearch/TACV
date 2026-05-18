@@ -139,11 +139,27 @@ async function loadFiles(files) {
 }
 
 /* ── Activar una serie por índice en SeriesManager ─────── */
+// _currentSeriesUid se trackea independientemente porque cuando llega
+// el evento 'seriesChanged', SeriesManager._activeIdx ya cambió y
+// getActive() devuelve la serie NUEVA, no la que se estaba dejando.
+let _seriesActivating = false;
+let _currentSeriesUid = null;
+
 function _activateSeries(idx) {
+    if (_seriesActivating) return;
+    _seriesActivating = true;
+
+    // Guardar mediciones de la serie que se deja usando el uid trackeado
+    MeasurementStore.saveForSeries(_currentSeriesUid);
+
     SeriesManager.setActive(idx);
     const entry  = SeriesManager.getActive();
-    if (!entry) return;
+    if (!entry) { _seriesActivating = false; return; }
     const series = entry.frames;
+
+    // Actualizar uid activo antes de cargar mediciones
+    _currentSeriesUid = entry.uid;
+    MeasurementStore.loadForSeries(entry.uid);
 
     SeriesPanel.init(series);
     const vp = ViewportLayout.getActive();
@@ -165,12 +181,30 @@ function _activateSeries(idx) {
         windowCenter: vp?.state.windowCenter,
         zoom: 1, panX: 0, panY: 0,
     });
+
+    _seriesActivating = false;
 }
 
-/* ── Cerrar estudio actual ──────────────────────────────── */
+/* ── Cerrar serie activa (o todo si es la única) ─────────── */
 function closeAll() {
     SeriesPanel.stopCine();
 
+    if (SeriesManager.getCount() > 1) {
+        // Quedan más series: descartar mediciones de la activa, eliminarla y cambiar a la adyacente
+        const removedUid = SeriesManager.getActive()?.uid;
+        MeasurementStore.discardForSeries(removedUid);
+        MeasurementStore.clearAll();
+        _currentSeriesUid = null; // evitar que _activateSeries guarde bajo uid eliminado
+        SeriesManager.removeActive();
+        SeriesManager.renderTabs();
+        _activateSeries(SeriesManager.getActiveIdx());
+        return;
+    }
+
+    // Era la única serie: limpiar todo y mostrar pantalla de bienvenida
+    MeasurementStore.discardForSeries(SeriesManager.getActive()?.uid);
+    MeasurementStore.clearAll();
+    _currentSeriesUid = null;
     SeriesManager.clear();
     SeriesManager.renderTabs();
     MprVolume.clear();
@@ -196,7 +230,6 @@ function closeAll() {
 
     document.getElementById('btnCloseStudy')?.classList.add('hidden');
 
-    // Mostrar welcome screen si no está ya
     if (!document.getElementById('welcomeScreen')) {
         const ws = document.createElement('div');
         ws.id = 'welcomeScreen';

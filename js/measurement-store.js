@@ -10,6 +10,7 @@ const MeasurementStore = {
     _store: new Map(),  // sliceIndex → Measurement[]
     _nextId: 1,
     _sessionId: null,
+    _seriesCache: new Map(), // seriesUid → { data, nextId }
 
     init(sessionId) {
         this._sessionId = sessionId || ('session_' + Date.now());
@@ -202,6 +203,29 @@ const MeasurementStore = {
             case 'freehand':  return m.points?.some(p => Math.hypot(p.x - x, p.y - y) <= r * 2);
             default:          return false;
         }
+    },
+
+    /* ── Contexto por serie ────────────────────────────── */
+    saveForSeries(uid) {
+        if (!uid) return;
+        const data = {};
+        this._store.forEach((arr, key) => { data[key] = arr.map(m => ({ ...m })); });
+        this._seriesCache.set(uid, { data, nextId: this._nextId });
+    },
+
+    loadForSeries(uid) {
+        this._store.clear();
+        const cached = uid ? this._seriesCache.get(uid) : null;
+        if (cached) {
+            for (const [key, arr] of Object.entries(cached.data))
+                this._store.set(parseInt(key), arr);
+            this._nextId = cached.nextId;
+        }
+        Storage.dispatch('measurementsChanged', {});
+    },
+
+    discardForSeries(uid) {
+        this._seriesCache.delete(uid);
     },
 
     /* ── Persistencia IDB ──────────────────────────────── */

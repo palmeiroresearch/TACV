@@ -47,6 +47,12 @@ const SeriesManager = {
 
     clear() { this._series = []; this._activeIdx = 0; },
 
+    removeActive() {
+        if (!this._series.length) return;
+        this._series.splice(this._activeIdx, 1);
+        this._activeIdx = Math.max(0, Math.min(this._activeIdx, this._series.length - 1));
+    },
+
     getActive()    { return this._series[this._activeIdx] || null; },
     getAll()       { return this._series; },
     getCount()     { return this._series.length; },

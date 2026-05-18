@@ -521,9 +521,19 @@ class Viewport {
             `Zoom: ${Math.round((s.zoom || 1) * 100)}%`;
     }
 
-    /* ── Capturar imagen como blob ──────────────────── */
+    /* ── Capturar imagen como blob (GL + overlay compuesto) ── */
     async captureBlob(type = 'image/png', quality = 0.95) {
-        return new Promise(resolve => this.glCanvas.toBlob(resolve, type, quality));
+        const w = this.glCanvas.width;
+        const h = this.glCanvas.height;
+        const out = document.createElement('canvas');
+        out.width  = w;
+        out.height = h;
+        const ctx = out.getContext('2d');
+        ctx.drawImage(this.glCanvas, 0, 0);
+        if (this.overlayCanvas?.width === w && this.overlayCanvas?.height === h) {
+            ctx.drawImage(this.overlayCanvas, 0, 0);
+        }
+        return new Promise(resolve => out.toBlob(resolve, type, quality));
     }
 
     clearFrame() {

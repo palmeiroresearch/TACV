@@ -87,10 +87,7 @@ const Export = {
         viewport = viewport || ViewportLayout.getActive();
         if (!viewport?.state.frame) { UI.showToast('No hay imagen cargada', 'warning'); return; }
 
-        UI.showToast('Generando reporte…', 'info', 2000);
-        const blob   = await viewport.captureBlob('image/png');
-        const reader = new FileReader();
-        const imgB64 = await new Promise(res => { reader.onload = () => res(reader.result); reader.readAsDataURL(blob); });
+        UI.showToast('Generando reporte…', 'info', 3500);
 
         const f    = viewport.state.frame;
         const s    = viewport.state;
@@ -101,36 +98,94 @@ const Export = {
             switch (m.type) {
                 case 'distance':  return `${m.distanceMm?.toFixed(2) ?? '—'} mm`;
                 case 'angle':     return `${m.angleDeg?.toFixed(1) ?? '—'}°`;
+                case 'cobb':      return `${m.angleDeg?.toFixed(1) ?? '—'}° (Cobb)`;
                 case 'ellipse':
-                case 'rectangle': return m.stats ? `Media ${m.stats.mean} ±${m.stats.std} HU · Área ${m.stats.area} mm²` : '—';
-                case 'arrow':     return m.label || '—';
+                case 'rectangle':
+                case 'freehand':  return m.stats ? `Media ${m.stats.mean} ±${m.stats.std} HU · Área ${m.stats.area} mm²` : '—';
+                case 'arrow':     return m.label || 'Indicador visual';
                 case 'text':      return m.text || '—';
                 default:          return '—';
             }
         };
-        const typeEs = { distance: 'Distancia', angle: 'Ángulo', ellipse: 'ROI Elipse', rectangle: 'ROI Rectángulo', arrow: 'Flecha', text: 'Texto' };
+        const typeEs = {
+            distance:  'Distancia',     angle:     'Ángulo',
+            cobb:      'Ángulo de Cobb', ellipse:   'ROI Elipse',
+            rectangle: 'ROI Rectángulo', freehand:  'ROI Libre',
+            arrow:     'Flecha',         text:      'Texto',
+        };
 
-        const rows = all.length
-            ? all.map(m => `<tr><td>${m.sliceIndex + 1}</td><td>${typeEs[m.type] || m.type}</td><td>${fmtVal(m)}</td></tr>`).join('')
-            : '<tr><td colspan="3" style="color:#888;text-align:center">Sin mediciones</td></tr>';
+        // ── Determinar qué slices capturar ──────────────────────────
+        // Si hay mediciones: capturar solo los slices anotados.
+        // Si no hay: capturar solo el slice actual (fallback).
+        const annotatedIdxs = all.length
+            ? [...new Set(all.map(m => m.sliceIndex))].sort((a, b) => a - b)
+            : [s.sliceIndex];
 
+        const series      = SeriesPanel.getSeries();
+        const origFrame   = viewport.state.frame;
+        const origSlice   = viewport.state.sliceIndex;
+        const origTotal   = viewport.state.totalSlices;
+        const origTv      = viewport.state.tvEnabled;
+        viewport.state.tvEnabled = false; // evitar esperar al worker durante captura
+
+        // ── Capturar imagen de cada slice anotado ───────────────────
+        const captures = [];
+        for (const idx of annotatedIdxs) {
+            const frame = series[idx] ?? origFrame;
+            viewport.loadFrame(frame, idx, series.length || origTotal);
+            viewport.render();
+            await new Promise(r => requestAnimationFrame(r));
+            const blob = await viewport.captureBlob('image/png');
+            const b64  = await new Promise(r => {
+                const rd = new FileReader();
+                rd.onload = () => r(rd.result);
+                rd.readAsDataURL(blob);
+            });
+            captures.push({ idx, b64, measurements: all.filter(m => m.sliceIndex === idx) });
+        }
+
+        // ── Restaurar slice original ─────────────────────────────────
+        viewport.state.tvEnabled = origTv;
+        viewport.loadFrame(origFrame, origSlice, origTotal);
+        viewport.render();
+
+        // ── Construir secciones por slice ───────────────────────────
+        const sliceSections = captures.map(({ idx, b64, measurements }) => {
+            const mRows = measurements.map(m =>
+                `<tr><td>${typeEs[m.type] || m.type}</td><td>${fmtVal(m)}</td></tr>`
+            ).join('');
+            const mTable = mRows
+                ? `<table><thead><tr><th>Tipo</th><th>Valor</th></tr></thead><tbody>${mRows}</tbody></table>`
+                : '';
+            return `
+<div class="slice-block">
+  <h2>Slice ${idx + 1}</h2>
+  <img src="${b64}" alt="Slice ${idx + 1}">
+  ${mTable}
+</div>`;
+        }).join('\n');
+
+        // ── HTML final ───────────────────────────────────────────────
         const html = `<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8">
 <title>Reporte TAC — ${f.patientName || 'Paciente'}</title>
 <style>
-  body{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;color:#222;background:#fff}
-  h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;font-weight:600;border-bottom:2px solid #0066cc;padding-bottom:4px;margin:24px 0 10px;color:#0066cc}
+  body{font-family:Arial,sans-serif;max-width:960px;margin:40px auto;color:#222;background:#fff}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:14px;font-weight:700;border-bottom:2px solid #0066cc;padding-bottom:4px;margin:28px 0 10px;color:#0066cc;text-transform:uppercase;letter-spacing:.04em}
   .meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:13px;background:#f5f7fa;padding:12px;border-radius:6px}
   .meta dt{font-weight:600;color:#555}.meta dd{margin:0}
-  img{width:100%;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.15);margin:8px 0}
-  table{width:100%;border-collapse:collapse;font-size:13px}
+  .slice-block{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid #e8eaed}
+  .slice-block:last-child{border-bottom:none}
+  img{width:100%;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.15);margin:8px 0 12px;display:block}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
   th{background:#0066cc;color:#fff;padding:7px 10px;text-align:left}
   td{padding:6px 10px;border-bottom:1px solid #e0e0e0}
-  tr:last-child td{border-bottom:none}tr:nth-child(even){background:#f9f9f9}
+  tr:last-child td{border-bottom:none}tr:nth-child(even) td{background:#f9f9f9}
   footer{font-size:11px;color:#aaa;text-align:center;margin-top:32px}
 </style></head><body>
 <h1>Informe de Imagen TAC</h1>
-<p style="font-size:12px;color:#888">Generado: ${date}</p>
+<p style="font-size:12px;color:#888;margin:2px 0 16px">Generado: ${date}</p>
 
 <h2>Datos del Paciente y Estudio</h2>
 <dl class="meta">
@@ -142,15 +197,12 @@ const Export = {
   <dt>Fecha estudio</dt><dd>${f.studyDate || '—'}</dd>
   <dt>Descripción</dt><dd>${f.studyDesc || f.seriesDesc || '—'}</dd>
   <dt>Institución</dt><dd>${f.institutionName || '—'}</dd>
-  <dt>Slice</dt><dd>${s.sliceIndex + 1} / ${s.totalSlices || '?'}</dd>
   <dt>W/L</dt><dd>${Math.round(s.windowWidth)} / ${Math.round(s.windowCenter)}</dd>
+  <dt>Slices con anotaciones</dt><dd>${annotatedIdxs.length}</dd>
 </dl>
 
-<h2>Imagen</h2>
-<img src="${imgB64}" alt="Imagen TAC">
-
-<h2>Mediciones (${all.length})</h2>
-<table><thead><tr><th>Slice</th><th>Tipo</th><th>Valor</th></tr></thead><tbody>${rows}</tbody></table>
+<h2>Imágenes Anotadas (${captures.length} slice${captures.length !== 1 ? 's' : ''})</h2>
+${sliceSections}
 
 <footer>Generado con TAC Viewer — Visor DICOM Avanzado</footer>
 </body></html>`;
