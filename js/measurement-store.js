@@ -152,8 +152,9 @@ const MeasurementStore = {
                 }
             }
         }
-        const w = (xMax - xMin) * cs, h = (yMax - yMin) * rs;
-        return this._stats(values, null, null, cs, rs, 'rect', w, h);
+        // Área real del polígono = píxeles dentro × área de píxel (no bounding box)
+        const area_mm2 = values.length * cs * rs;
+        return this._stats(values, null, null, cs, rs, 'rect', area_mm2, 1);
     },
 
     _pointInPolygon(x, y, pts) {
@@ -203,6 +204,31 @@ const MeasurementStore = {
             case 'freehand':  return m.points?.some(p => Math.hypot(p.x - x, p.y - y) <= r * 2);
             default:          return false;
         }
+    },
+
+    /* ── Volumetría por integración trapezoidal ──────────── */
+    computeVolume(measurements, frames) {
+        const sorted = [...measurements].sort((a, b) => a.sliceIndex - b.sliceIndex);
+        const n = sorted.length;
+        if (!n) return null;
+        let vol = 0;
+        const z = (k) => {
+            const f = frames[sorted[k].sliceIndex];
+            return f?.sliceLocation ?? (sorted[k].sliceIndex * (f?.sliceThickness || 1));
+        };
+        for (let i = 0; i < n; i++) {
+            const m = sorted[i];
+            const f = frames[m.sliceIndex];
+            if (!f) continue;
+            const [rs, cs] = f.pixelSpacing || [1, 1];
+            const area = m.stats?.count ? m.stats.count * cs * rs : (m.stats?.area ?? 0);
+            const gap  = n === 1     ? (f.sliceThickness || 1)
+                       : i === 0     ? Math.abs(z(1)   - z(0))
+                       : i === n - 1 ? Math.abs(z(n-1) - z(n-2))
+                       :               Math.abs(z(i+1) - z(i-1)) / 2;
+            vol += area * gap;
+        }
+        return { mm3: vol, mL: vol / 1000, sliceCount: n };
     },
 
     /* ── Contexto por serie ────────────────────────────── */

@@ -101,7 +101,7 @@ const DICOM_TAGS = {
 };
 
 /* ── Orientación para TAC axial ─────────────────────────── */
-const ORIENTATION_AXIAL    = { top: 'A', bottom: 'P', left: 'R', right: 'L' };
+const ORIENTATION_AXIAL    = { top: 'P', bottom: 'A', left: 'R', right: 'L' };
 const ORIENTATION_CORONAL  = { top: 'H', bottom: 'F', left: 'R', right: 'L' };
 const ORIENTATION_SAGITTAL = { top: 'H', bottom: 'F', left: 'A', right: 'P' };
 

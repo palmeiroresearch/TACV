@@ -81,6 +81,65 @@ const MeasurementsPanel = {
                 ViewportLayout.getActive()?.render();
             });
         });
+
+        // Sección de volumetría (si hay ROI libres)
+        const freehandAll = all.filter(m => m.type === 'freehand');
+        if (freehandAll.length) this._renderVolumeSection(body, freehandAll);
+    },
+
+    _renderVolumeSection(body, freehandAll) {
+        const section = document.createElement('div');
+        section.className = 'mp-vol-section';
+
+        const rows = freehandAll
+            .sort((a, b) => a.sliceIndex - b.sliceIndex)
+            .map(m => {
+                const area = m.stats?.area != null ? `${m.stats.area} mm²` : '—';
+                return `<label class="mp-vol-row">
+                    <input type="checkbox" data-vol-id="${m.id}" checked>
+                    <span class="mp-vol-slice">Slice ${m.sliceIndex + 1}</span>
+                    <span class="mp-vol-area">${area}</span>
+                </label>`;
+            }).join('');
+
+        section.innerHTML = `
+            <div class="mp-vol-title">Volumetría por integración</div>
+            <div class="mp-vol-rows">${rows}</div>
+            <button class="mp-vol-btn" id="btnCalcVolume">Calcular Volumen</button>
+            <div class="mp-vol-result hidden" id="mpVolResult"></div>`;
+
+        body.appendChild(section);
+
+        section.querySelector('#btnCalcVolume').addEventListener('click', () => {
+            const checked = [...section.querySelectorAll('input[data-vol-id]:checked')]
+                .map(cb => parseInt(cb.dataset.volId));
+            if (!checked.length) return;
+
+            const selected = freehandAll.filter(m => checked.includes(m.id));
+            const frames   = SeriesPanel.getSeries();
+            const result   = MeasurementStore.computeVolume(selected, frames);
+            const res      = section.querySelector('#mpVolResult');
+            if (!result) { res.textContent = 'Error calculando volumen'; res.classList.remove('hidden'); return; }
+
+            const mL = result.mL.toFixed(2);
+            let html = `<span class="mp-vol-main">${mL} mL</span>
+                        <span class="mp-vol-sub">${result.sliceCount} slice${result.sliceCount !== 1 ? 's' : ''} · trapezoidal</span>`;
+
+            // Estimación ABC/2 si es un solo slice (quick estimate)
+            if (result.sliceCount === 1) {
+                const m = selected[0];
+                const f = frames[m.sliceIndex];
+                if (f && m.stats) {
+                    const [rs, cs] = f.pixelSpacing || [1, 1];
+                    const equiv_r  = Math.sqrt(m.stats.area / Math.PI); // radio equivalente en mm
+                    const abc2     = (equiv_r * 2 * equiv_r * 2 * (f.sliceThickness || 5)) / 2000;
+                    html += `<span class="mp-vol-abc2">ABC/2 ≈ ${abc2.toFixed(1)} mL (1 slice)</span>`;
+                }
+            }
+
+            res.innerHTML = html;
+            res.classList.remove('hidden');
+        });
     },
 
     _formatValue(m) {
