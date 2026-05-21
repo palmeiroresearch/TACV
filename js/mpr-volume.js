@@ -4,7 +4,8 @@ const MprVolume = {
     _series:   null,
     _dims:     null,
     _rawData:  null,       // Float32Array — Int16 como float, una vez en CPU
-    _textures: new WeakMap(),   // WebGLRenderingContext → WebGLTexture
+    _textures: new Map(),  // WebGLRenderingContext → { tex, version }
+    _version:  0,          // incrementa en setSeries para invalidar texturas cacheadas
 
     /* ── Preparar buffer CPU (sin GPU) ──────────────── */
     setSeries(series) {
@@ -37,12 +38,23 @@ const MprVolume = {
                 'Verificá el tag x00280030 en el panel de metadata.');
         }
 
+        // Detectar dirección de adquisición: si Z crece a lo largo de la serie
+        // (inferior→superior) o decrece (superior→inferior).
+        // Esto determina si up=[0,0,+1] o [0,0,-1] en coronal/sagital.
+        const z0    = series[0].imagePosition?.[2]               ?? series[0].sliceLocation               ?? 0;
+        const zLast = series[series.length - 1].imagePosition?.[2] ?? series[series.length - 1].sliceLocation ?? 0;
+        const zAscending = series.length < 2 || zLast >= z0;
+
         this._dims = {
             width: W, height: H, depth: D,
             spacingX,
             spacingY,
             spacingZ,
+            zAscending,
         };
+
+        // Invalidar texturas GPU cacheadas de la serie anterior
+        this._version++;
 
         // Almacenar como Float32: valor raw Int16 directamente como float
         this._rawData = new Float32Array(W * H * D);
@@ -60,7 +72,13 @@ const MprVolume = {
     /* ── Subir R32F TEXTURE_3D para este contexto GL ── */
     buildForContext(gl) {
         if (!this._rawData || !this._dims) return false;
-        if (this._textures.has(gl)) return true;
+
+        const cached = this._textures.get(gl);
+        // Si ya existe y es de la versión actual, no hay que re-subir
+        if (cached && cached.version === this._version) return true;
+
+        // Liberar textura anterior si existía
+        if (cached) gl.deleteTexture(cached.tex);
 
         const { width, height, depth } = this._dims;
 
@@ -77,22 +95,27 @@ const MprVolume = {
 
         gl.texImage3D(
             gl.TEXTURE_3D, 0,
-            gl.R32F,            // float — soporta LINEAR + sampler3D
+            gl.R32F,
             width, height, depth, 0,
-            gl.RED,
-            gl.FLOAT,
+            gl.RED, gl.FLOAT,
             this._rawData
         );
 
         gl.bindTexture(gl.TEXTURE_3D, null);
-        this._textures.set(gl, tex);
+        this._textures.set(gl, { tex, version: this._version });
         return true;
     },
 
-    clear() { this._rawData = null; this._dims = null; },
+    clear() {
+        // Liberar texturas GPU antes de soltar los datos CPU
+        this._textures.forEach(({ tex }, gl) => { try { gl.deleteTexture(tex); } catch {} });
+        this._textures.clear();
+        this._rawData = null;
+        this._dims    = null;
+    },
 
-    getTexture(gl)        { return this._textures.get(gl) || null; },
-    isReadyForContext(gl) { return this._textures.has(gl) && !!this._dims; },
+    getTexture(gl)        { return this._textures.get(gl)?.tex || null; },
+    isReadyForContext(gl) { return !!this._textures.get(gl) && !!this._dims; },
     isReady()             { return !!this._rawData && !!this._dims; },
 
     getDims()             { return this._dims; },
@@ -102,11 +125,13 @@ const MprVolume = {
         return { origin: [0, 0, z], right: [1, 0, 0], up: [0, 1, 0] };
     },
     getCoronalPlane(yFraction = 0.5) {
-        // up=[0,0,1]: tc.y=1 (pantalla arriba) → Z=1 (superior) ✓
-        return { origin: [0, yFraction, 0], right: [1, 0, 0], up: [0, 0, 1] };
+        // Si Z crece inferior→superior: tc.y=1 → Z=1 = superior ✓ (up=+1, origin.z=0)
+        // Si Z crece superior→inferior: tc.y=1 debe → Z=0 = superior ✓ (up=-1, origin.z=1)
+        const asc = this._dims?.zAscending ?? true;
+        return { origin: [0, yFraction, asc ? 0 : 1], right: [1, 0, 0], up: [0, 0, asc ? 1 : -1] };
     },
     getSagittalPlane(xFraction = 0.5) {
-        // up=[0,0,1]: idem → superior arriba ✓
-        return { origin: [xFraction, 0, 0], right: [0, 1, 0], up: [0, 0, 1] };
+        const asc = this._dims?.zAscending ?? true;
+        return { origin: [xFraction, 0, asc ? 0 : 1], right: [0, 1, 0], up: [0, 0, asc ? 1 : -1] };
     },
 };

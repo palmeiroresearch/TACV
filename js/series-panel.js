@@ -90,13 +90,13 @@ const SeriesPanel = {
 
         const vp = ViewportLayout.getActive();
         const frame = this._series[index];
+        // Nunca cargar frame 2D en viewports MPR coronal/sagital (usan textura 3D)
+        const canLoad = (v) => !v.mprPlane || v.mprPlane === 'axial';
         if (ViewportLayout.syncEnabled && frame) {
             ViewportLayout.getAll().forEach(v => {
-                if (!v.mprPlane || v.mprPlane === 'axial') {
-                    v.loadFrame(frame, index, this._series.length);
-                }
+                if (canLoad(v)) v.loadFrame(frame, index, this._series.length);
             });
-        } else if (vp && frame) {
+        } else if (vp && frame && canLoad(vp)) {
             vp.loadFrame(frame, index, this._series.length);
         }
 

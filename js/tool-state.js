@@ -31,6 +31,8 @@ const ToolState = {
         this._activeViewport?.cell?.classList.remove('active');
         this._activeViewport = viewport;
         viewport?.cell?.classList.add('active');
+        // Sincronizar botones toggle con el estado del nuevo viewport activo
+        if (typeof UI !== 'undefined') UI.syncToolbarToViewport(viewport);
     },
 
     /* ── Routing de eventos mouse ────────────────────── */
@@ -99,7 +101,7 @@ const ToolState = {
 
     onWheel(viewport, e) {
         e.preventDefault();
-        this.setActiveViewport(viewport);
+        // No activar viewport en scroll — solo en mousedown (clic explícito).
 
         if (e.ctrlKey || e.metaKey) {
             const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;

@@ -586,6 +586,25 @@ const UI = {
         });
     },
 
+    /* ── Sincronizar toolbar con el viewport activo ──── */
+    syncToolbarToViewport(vp) {
+        if (!vp) return;
+        const s = vp.state;
+        document.getElementById('btnMultiWindow')?.classList.toggle('on', !!s.isMultiWindowEnabled);
+        document.getElementById('btnTV')?.classList.toggle('on', !!s.tvEnabled);
+        document.getElementById('btnInvert')?.classList.toggle('on', !!s.invert);
+        document.getElementById('btnSuperRes')?.classList.toggle('on', !!s.isSuperResEnabled);
+        document.getElementById('btnAbMode')?.classList.toggle('on', !!s.abMode);
+        document.getElementById('btnAnonymize')?.classList.toggle('on', !!s.isAnonymized);
+        document.getElementById('btnFlipH')?.classList.toggle('on', !!s.flipH);
+        document.getElementById('btnFlipV')?.classList.toggle('on', !!s.flipV);
+        document.querySelectorAll('.tool-btn[data-map]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.map === (s.colorMapId || 'grayscale'));
+        });
+        const sel = document.getElementById('presetSelect');
+        if (sel && s.presetId) sel.value = s.presetId;
+    },
+
     /* ── Aplicar settings guardados ─────────────────── */
     applySettings() {
         const settings = Storage.getSettings();

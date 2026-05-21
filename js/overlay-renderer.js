@@ -11,11 +11,14 @@ const OverlayRenderer = {
     /* ── Render completo ──────────────────────────────── */
     render(viewport) {
         const ctx = viewport.overlayCtx;
-        const { canvas } = viewport.overlayCanvas;
         this._sync(viewport);
         ctx.clearRect(0, 0, viewport.overlayCanvas.width, viewport.overlayCanvas.height);
 
-        if (!viewport.state.frame) return;
+        // Viewports MPR sin frame (coronal/sagital) solo necesitan las guías cruzadas
+        if (!viewport.state.frame) {
+            if (viewport.mprPlane !== undefined) this.drawMprCrosshair(viewport);
+            return;
+        }
 
         this.drawDicomInfo(viewport);
         this.drawOrientationMarkers(viewport);
@@ -197,6 +200,9 @@ const OverlayRenderer = {
 
     /* ── Mediciones guardadas ────────────────────────── */
     drawMeasurements(viewport) {
+        // Las mediciones se guardan en coordenadas del plano axial —
+        // no se proyectan al coronal/sagital (no hay transformación 3D).
+        if (viewport.mprPlane && viewport.mprPlane !== 'axial') return;
         const items = MeasurementStore.get(viewport.state.sliceIndex);
         items.forEach(m => this._drawMeasurement(viewport, m));
     },
@@ -488,8 +494,12 @@ const OverlayRenderer = {
 
         // ── Vistas CORONAL y SAGITAL: líneas de axial (Z) y la otra vista
         if (viewport.mprPlane === 'coronal' || viewport.mprPlane === 'sagital') {
+            // Cuando zAscending=false el shader invierte Z (up=[0,0,-1], origin.z=1),
+            // así que la fracción para la guía también debe invertirse.
+            const zAsc = MprVolume.getDims()?.zAscending ?? true;
+            const axialZGuide = zAsc ? axialZ : (1 - axialZ);
             // Línea horizontal = posición axial (Z)
-            const axialScreenY = this._mprTexcoordToScreenY(axialZ, viewport, ch);
+            const axialScreenY = this._mprTexcoordToScreenY(axialZGuide, viewport, ch);
             ctx.strokeStyle = C.axial;
             ctx.beginPath();
             ctx.moveTo(0, axialScreenY);

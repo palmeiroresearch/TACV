@@ -164,10 +164,10 @@ class MprViewport extends Viewport {
         }
         if (!this._mprProgram) return;
 
-        if (!MprVolume.isReadyForContext(this.renderer.gl)) {
-            if (!MprVolume.isReady()) return;
-            MprVolume.buildForContext(this.renderer.gl);
-        }
+        // buildForContext verifica internamente si la textura está vigente (version)
+        // y la re-sube si hay una serie nueva. Siempre llamarlo — es idempotente.
+        if (!MprVolume.isReady()) return;
+        if (!MprVolume.buildForContext(this.renderer.gl)) return;
 
         const gl  = this.renderer.gl;
         const rdr = this.renderer;
@@ -290,10 +290,14 @@ class MprViewport extends Viewport {
         const tcY = sy * (cy / ch - 0.5) + ty + 0.5;
 
         // Y maps to Z (depth) → navigate axial
+        // Con zAscending=false el shader usa up=[0,0,-1], por lo que tcY=1 (arriba)
+        // corresponde a Z=0 (serie[0] = superior) → hay que invertir para el índice.
         const zFrac = Math.max(0.01, Math.min(0.99, tcY));
+        const zAsc  = MprVolume.getDims()?.zAscending ?? true;
         const series = SeriesPanel.getSeries();
         if (series.length > 0) {
-            SeriesPanel.jumpTo(Math.round(zFrac * (series.length - 1)));
+            const sliceIdx = zAsc ? zFrac : (1 - zFrac);
+            SeriesPanel.jumpTo(Math.round(sliceIdx * (series.length - 1)));
         }
 
         // X maps to the other horizontal plane

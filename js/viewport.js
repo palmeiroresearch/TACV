@@ -428,7 +428,7 @@ class Viewport {
         gc.addEventListener('mouseleave',  ()  => ToolState.onMouseLeave(this));
         gc.addEventListener('wheel',       (e) => ToolState.onWheel(this, e), { passive: false });
         gc.addEventListener('contextmenu', (e) => ToolState.onContextMenu(e));
-        gc.addEventListener('mouseenter',  ()  => ToolState.setActiveViewport(this));
+        // La activación ocurre solo en mousedown, no en hover (ver onMouseDown).
 
         // A/B divider drag
         let abDragging = false;

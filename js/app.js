@@ -138,6 +138,64 @@ async function loadFiles(files) {
     activateFrames(allFrames);
 }
 
+/* ── Snapshot / restore del estado visual de un viewport ── */
+function _snapshotViewportState(vp) {
+    const s = vp.state;
+    return {
+        sliceIndex:           s.sliceIndex       ?? 0,
+        windowWidth:          s.windowWidth,
+        windowCenter:         s.windowCenter,
+        zoom:                 s.zoom             ?? 1,
+        panX:                 s.panX             ?? 0,
+        panY:                 s.panY             ?? 0,
+        flipH:                s.flipH            ?? false,
+        flipV:                s.flipV            ?? false,
+        rotation:             s.rotation         ?? 0,
+        colorMapId:           s.colorMapId       || 'grayscale',
+        isMultiWindowEnabled: s.isMultiWindowEnabled ?? false,
+        tvEnabled:            s.tvEnabled        ?? false,
+        abMode:               s.abMode           ?? false,
+        isSuperResEnabled:    s.isSuperResEnabled ?? false,
+        isAnonymized:         s.isAnonymized      ?? false,
+        bicubicEnabled:       s.bicubicEnabled    ?? false,
+        usmEnabled:           s.usmEnabled        ?? false,
+        bilateralEnabled:     s.bilateralEnabled  ?? false,
+        anisoEnabled:         s.anisoEnabled      ?? false,
+        claheEnabled:         s.claheEnabled      ?? false,
+        retinexEnabled:       s.retinexEnabled    ?? false,
+    };
+}
+
+function _restoreViewportState(vp, saved) {
+    Object.assign(vp.state, {
+        windowWidth:          saved.windowWidth,
+        windowCenter:         saved.windowCenter,
+        zoom:                 saved.zoom,
+        panX:                 saved.panX,
+        panY:                 saved.panY,
+        flipH:                saved.flipH,
+        flipV:                saved.flipV,
+        rotation:             saved.rotation ?? 0,
+        colorMapId:           saved.colorMapId || 'grayscale',
+        isMultiWindowEnabled: saved.isMultiWindowEnabled,
+        tvEnabled:            saved.tvEnabled,
+        abMode:               saved.abMode,
+        isSuperResEnabled:    saved.isSuperResEnabled,
+        isAnonymized:         saved.isAnonymized,
+        bicubicEnabled:       saved.bicubicEnabled,
+        usmEnabled:           saved.usmEnabled,
+        bilateralEnabled:     saved.bilateralEnabled,
+        anisoEnabled:         saved.anisoEnabled,
+        claheEnabled:         saved.claheEnabled,
+        retinexEnabled:       saved.retinexEnabled,
+    });
+    // Sincronizar el preset select con el W/L restaurado
+    const presetSel = document.getElementById('presetSelect');
+    if (presetSel && saved.presetId) presetSel.value = saved.presetId;
+    // Sincronizar botones toggle de la toolbar
+    if (typeof UI !== 'undefined') UI.syncToolbarToViewport(vp);
+}
+
 /* ── Activar una serie por índice en SeriesManager ─────── */
 // _currentSeriesUid se trackea independientemente porque cuando llega
 // el evento 'seriesChanged', SeriesManager._activeIdx ya cambió y
@@ -149,37 +207,64 @@ function _activateSeries(idx) {
     if (_seriesActivating) return;
     _seriesActivating = true;
 
-    // Guardar mediciones de la serie que se deja usando el uid trackeado
+    // Guardar estado visual y mediciones de la serie que se deja.
+    // Verificar que vp.state.frame pertenece a esa serie: loadFiles muestra el primer
+    // frame de la nueva serie como preview antes de llamar _activateSeries, lo que
+    // contaminaría el snapshot con sliceIndex=0 de la nueva serie.
+    const leavingEntry = SeriesManager.getAll().find(e => e.uid === _currentSeriesUid);
+    const vp = ViewportLayout.getActive();
+    if (leavingEntry && vp?.state.frame) {
+        const frameSeriesUid = vp.state.frame.allTags?.['x0020000e'] ?? null;
+        const frameBelongsHere = !frameSeriesUid || frameSeriesUid === _currentSeriesUid;
+        if (frameBelongsHere) leavingEntry.viewState = _snapshotViewportState(vp);
+    }
     MeasurementStore.saveForSeries(_currentSeriesUid);
 
     SeriesManager.setActive(idx);
-    const entry  = SeriesManager.getActive();
+    const entry = SeriesManager.getActive();
     if (!entry) { _seriesActivating = false; return; }
     const series = entry.frames;
 
-    // Actualizar uid activo antes de cargar mediciones
     _currentSeriesUid = entry.uid;
     MeasurementStore.loadForSeries(entry.uid);
 
     SeriesPanel.init(series);
-    const vp = ViewportLayout.getActive();
     if (vp) {
-        vp.loadFrame(series[0], 0, series.length);
-        // Sincronizar W/L con el preset guardado para que select y display coincidan siempre
-        const preset = Storage.getSettings().activePreset || DEFAULT_PRESET;
-        vp.applyPreset(preset);
-        vp.fitToWindow();
+        if (entry.viewState) {
+            // Serie visitada antes: restaurar al punto exacto donde se dejó
+            const si = Math.min(entry.viewState.sliceIndex, series.length - 1);
+            vp.loadFrame(series[si], si, series.length);
+            _restoreViewportState(vp, entry.viewState);
+            // Sincronizar panel lateral con el slice restaurado (sin recargar el frame)
+            SeriesPanel._activeIndex = si;
+            SeriesPanel.setActive(si);
+            SeriesPanel._updateCounter(si);
+        } else {
+            // Primera visita: aplicar preset guardado y encuadrar
+            vp.loadFrame(series[0], 0, series.length);
+            const preset = Storage.getSettings().activePreset || DEFAULT_PRESET;
+            vp.applyPreset(preset);
+            vp.fitToWindow();
+        }
         vp.render();
     }
 
     MetadataPanel.show(series[0]);
     MprVolume.setSeries(series);
 
+    // Forzar re-render de viewports MPR (coronal/sagital) para que reconstruyan
+    // el volumen de la nueva serie — la textura 3D se re-sube en buildForContext.
+    ViewportLayout.getAll().forEach(v => {
+        if (v.mprPlane && v.mprPlane !== 'axial') v.render();
+    });
+
     Storage.saveSession({
-        sliceIndex: 0,
+        sliceIndex:   vp?.state.sliceIndex  ?? 0,
         windowWidth:  vp?.state.windowWidth,
         windowCenter: vp?.state.windowCenter,
-        zoom: 1, panX: 0, panY: 0,
+        zoom: vp?.state.zoom ?? 1,
+        panX: vp?.state.panX ?? 0,
+        panY: vp?.state.panY ?? 0,
     });
 
     _seriesActivating = false;
