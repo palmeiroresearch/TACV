@@ -30,6 +30,7 @@ class Viewport {
         // Motor WebGL2
         try {
             this.renderer = new RendererGL(this.glCanvas);
+            this.renderer._onContextRestored = () => this.render();
         } catch (err) {
             cell.innerHTML = `<div style="color:red;padding:20px">WebGL2 no disponible: ${err.message}</div>`;
             return;

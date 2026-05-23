@@ -152,6 +152,7 @@ function _snapshotViewportState(vp) {
         flipV:                s.flipV            ?? false,
         rotation:             s.rotation         ?? 0,
         colorMapId:           s.colorMapId       || 'grayscale',
+        presetId:             s.presetId         || DEFAULT_PRESET,
         isMultiWindowEnabled: s.isMultiWindowEnabled ?? false,
         tvEnabled:            s.tvEnabled        ?? false,
         abMode:               s.abMode           ?? false,
@@ -170,6 +171,7 @@ function _restoreViewportState(vp, saved) {
     Object.assign(vp.state, {
         windowWidth:          saved.windowWidth,
         windowCenter:         saved.windowCenter,
+        presetId:             saved.presetId || DEFAULT_PRESET,
         zoom:                 saved.zoom,
         panX:                 saved.panX,
         panY:                 saved.panY,

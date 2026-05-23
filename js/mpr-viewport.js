@@ -84,6 +84,11 @@ class MprViewport extends Viewport {
         if (plane !== 'axial' && this.renderer) {
             this._initMprShader();
             this._initMprClickNav();
+            // Sobreescribir el handler del padre: el shader MPR también necesita reinit
+            this.renderer._onContextRestored = () => {
+                this._initMprShader();
+                this.render();
+            };
         }
     }
 

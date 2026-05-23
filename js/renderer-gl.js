@@ -38,7 +38,26 @@ class RendererGL {
         // PostProcessor — se inicializa después de _init()
         this.postProcessor = null;
 
+        this._onContextRestored = null;
         this._init();
+
+        // Recuperación de contexto WebGL perdido (crítico en tablet: el OS mata
+        // el contexto GPU al hacer background o bajo presión de memoria).
+        canvas.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault(); // obligatorio para que el navegador restaure el contexto
+        });
+        canvas.addEventListener('webglcontextrestored', () => {
+            // Invalidar handles de estado para forzar re-upload completo
+            this._currentFrameId    = null;
+            this._currentColorMapId = null;
+            this._fboGray = null;
+            this._fboW    = 0;
+            this._fboH    = 0;
+            // Invalidar textura 3D cacheada para este contexto (MPR)
+            if (typeof MprVolume !== 'undefined') MprVolume._textures.delete(this.gl);
+            this._init();
+            this._onContextRestored?.();
+        });
     }
 
     /* ── Inicializar programa y geometría ─────────────── */

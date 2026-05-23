@@ -9,7 +9,6 @@ const SeriesPanel = {
     _activeIndex:  0,
     _cineInterval: null,
     _cineFps:      8,
-    _renderer:     null,  // RendererGL compartido para thumbnails
 
     /* ── Inicializar con una serie cargada ───────────── */
     init(series) {
@@ -20,10 +19,17 @@ const SeriesPanel = {
         document.getElementById('sliceCounter').classList.remove('hidden');
     },
 
-    /* ── Renderizar thumbnails ───────────────────────── */
+    /* ── Renderizar thumbnails (CPU 2D — sin contexto WebGL adicional) ── */
+    // Se evita crear un RendererGL extra porque los tablets tienen límite estricto
+    // de contextos WebGL simultáneos (~8). Con los viewports principales ya activos,
+    // crear otro contexto falla silenciosamente y los thumbnails nunca aparecen.
     _renderThumbnails() {
         const strip = document.getElementById('thumbnailStrip');
         strip.innerHTML = '';
+
+        // Lote adaptativo: en tablet reducir trabajo simultáneo
+        const isTouch = typeof Capabilities !== 'undefined' && Capabilities.isTouch;
+        const batchDelay = isTouch ? 40 : 20;  // ms entre lotes
 
         this._series.forEach((frame, i) => {
             const item   = document.createElement('div');
@@ -44,43 +50,51 @@ const SeriesPanel = {
 
             item.addEventListener('click', () => this.jumpTo(i));
 
-            // Renderizar thumbnail de forma diferida para no bloquear el UI
             const renderThumb = () => {
-                if (!this._renderer) {
-                    try {
-                        const offscreen = document.createElement('canvas');
-                        offscreen.width  = THUMB_SIZE;
-                        offscreen.height = THUMB_SIZE;
-                        this._renderer = new RendererGL(offscreen);
-                    } catch { return; }
-                }
                 try {
-                    const thumbState = {
-                        zoom: 1, panX: 0, panY: 0,
-                        flipH: false, flipV: false, rotation: 0,
-                        isInverted: false, colorMapId: 'grayscale',
-                        presetId: 'brain',
-                        windowWidth:  WINDOWING_PRESETS.brain.width,
-                        windowCenter: WINDOWING_PRESETS.brain.center,
-                    };
-                    // render() usa el offscreen canvas (THUMB_SIZE×THUMB_SIZE, no en DOM)
-                    // resize() detecta offsetWidth=0 y no lo toca → contexto GL intacto
-                    this._renderer.render(frame, thumbState);
-                    // Copiar resultado al canvas visible del thumbnail
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(this._renderer.canvas, 0, 0, THUMB_SIZE, THUMB_SIZE);
+                    this._renderThumb2D(canvas, frame);
                     item.classList.remove('loading');
                 } catch (e) { console.warn('Thumb error:', e); }
             };
 
-            if ('requestIdleCallback' in window) {
-                requestIdleCallback(renderThumb, { timeout: 2000 });
-            } else {
-                setTimeout(renderThumb, i * 30);
-            }
+            // Escalonar por lotes para no saturar el hilo principal en tablet
+            setTimeout(renderThumb, Math.floor(i / 5) * batchDelay);
         });
 
         this.setActive(0);
+    },
+
+    /* ── Render 2D de thumbnail (windowing CPU, sin WebGL) ── */
+    _renderThumb2D(canvas, frame) {
+        const ctx = canvas.getContext('2d');
+        const tw  = canvas.width;
+        const th  = canvas.height;
+        const fw  = frame.cols;
+        const fh  = frame.rows;
+        const preset    = WINDOWING_PRESETS.brain;
+        const wMin      = preset.center - preset.width / 2;
+        const wRange    = preset.width;
+        const slope     = frame.rescaleSlope     ?? 1;
+        const intercept = frame.rescaleIntercept ?? -1024;
+        const pd        = frame.pixelData;
+
+        const imageData = ctx.createImageData(tw, th);
+        const d = imageData.data;
+        for (let ty = 0; ty < th; ty++) {
+            // flipV: convención radiológica (fila 0 = inferior en pantalla)
+            const sy = Math.floor((th - 1 - ty) / th * fh);
+            const srcRow = sy * fw;
+            for (let tx = 0; tx < tw; tx++) {
+                const sx  = Math.floor(tx / tw * fw);
+                const hu  = pd[srcRow + sx] * slope + intercept;
+                const v   = hu <= wMin ? 0 : hu >= wMin + wRange ? 255
+                          : ((hu - wMin) / wRange * 255 + 0.5) | 0;
+                const idx = (ty * tw + tx) * 4;
+                d[idx] = d[idx + 1] = d[idx + 2] = v;
+                d[idx + 3] = 255;
+            }
+        }
+        ctx.putImageData(imageData, 0, 0);
     },
 
     /* ── Navegar a un slice ──────────────────────────── */
