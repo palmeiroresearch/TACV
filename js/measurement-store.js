@@ -8,9 +8,10 @@
 
 const MeasurementStore = {
     _store: new Map(),  // sliceIndex → Measurement[]
+    _notes: new Map(),  // sliceIndex → { text, updatedAt }
     _nextId: 1,
     _sessionId: null,
-    _seriesCache: new Map(), // seriesUid → { data, nextId }
+    _seriesCache: new Map(), // seriesUid → { data, nextId, notes }
 
     init(sessionId) {
         this._sessionId = sessionId || ('session_' + Date.now());
@@ -69,6 +70,7 @@ const MeasurementStore = {
 
     clearAll() {
         this._store.clear();
+        this._notes.clear();
         this._persist();
     },
 
@@ -82,6 +84,21 @@ const MeasurementStore = {
         for (const [, arr] of this._store) {
             arr.forEach(m => m.selected = false);
         }
+    },
+
+    /* ── Notas clínicas por slice ─────────────────────── */
+    setNote(sliceIndex, text) {
+        if (!text?.trim()) { this._notes.delete(sliceIndex); }
+        else { this._notes.set(sliceIndex, { text: text.trim(), updatedAt: Date.now() }); }
+        this._persist();
+    },
+
+    getNote(sliceIndex)  { return this._notes.get(sliceIndex) ?? null; },
+    hasNote(sliceIndex)  { return this._notes.has(sliceIndex) && !!this._notes.get(sliceIndex).text; },
+    getAllNotes()         {
+        return [...this._notes.entries()]
+            .sort((a, b) => a[0] - b[0])
+            .map(([sliceIndex, n]) => ({ sliceIndex, ...n }));
     },
 
     /* ── Geometría / estadísticas ──────────────────────── */
@@ -236,16 +253,23 @@ const MeasurementStore = {
         if (!uid) return;
         const data = {};
         this._store.forEach((arr, key) => { data[key] = arr.map(m => ({ ...m })); });
-        this._seriesCache.set(uid, { data, nextId: this._nextId });
+        const notes = {};
+        this._notes.forEach((n, k) => { notes[k] = n; });
+        this._seriesCache.set(uid, { data, nextId: this._nextId, notes });
     },
 
     loadForSeries(uid) {
         this._store.clear();
+        this._notes.clear();
         const cached = uid ? this._seriesCache.get(uid) : null;
         if (cached) {
             for (const [key, arr] of Object.entries(cached.data))
                 this._store.set(parseInt(key), arr);
             this._nextId = cached.nextId;
+            if (cached.notes) {
+                for (const [k, n] of Object.entries(cached.notes))
+                    this._notes.set(parseInt(k), n);
+            }
         }
         Storage.dispatch('measurementsChanged', {});
     },
@@ -261,6 +285,11 @@ const MeasurementStore = {
         this._persistTimer = setTimeout(() => {
             const serialized = {};
             this._store.forEach((arr, key) => { serialized[key] = arr; });
+            if (this._notes.size) {
+                const notes = {};
+                this._notes.forEach((n, k) => { notes[k] = n; });
+                serialized['_notes'] = notes;
+            }
             Storage.saveMeasurements(this._sessionId, serialized).catch(() => {});
         }, 500);
         Storage.dispatch('measurementsChanged', {});
@@ -269,9 +298,18 @@ const MeasurementStore = {
     async restore(sessionId) {
         const data = await Storage.loadMeasurements(sessionId);
         if (!data) return;
+        // Extraer notas antes del loop de mediciones (parseInt('_notes') = NaN, se saltaría,
+        // pero lo hacemos explícito para poblar _notes correctamente).
+        if (data['_notes']) {
+            for (const [k, n] of Object.entries(data['_notes']))
+                this._notes.set(parseInt(k), n);
+            delete data['_notes'];
+        }
         this._store.clear();
         for (const [key, arr] of Object.entries(data)) {
-            this._store.set(parseInt(key), arr);
+            const idx = parseInt(key);
+            if (isNaN(idx)) continue;
+            this._store.set(idx, arr);
             arr.forEach(m => { if (m.id >= this._nextId) this._nextId = m.id + 1; });
         }
     },

@@ -51,6 +51,8 @@
 
     // Keyboard shortcuts globales
     document.addEventListener('keydown', (e) => {
+        // No interceptar cuando el foco está en un campo de texto
+        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
         if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
             e.preventDefault();
             CaseLibrary.toggle();

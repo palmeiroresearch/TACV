@@ -58,8 +58,10 @@ const Export = {
 
     /* ── Mediciones CSV ─────────────────────────────── */
     exportMeasurementsCSV() {
-        const all = MeasurementStore.getAll();
-        if (!all.length) { UI.showToast('No hay mediciones para exportar', 'warning'); return; }
+        const all   = MeasurementStore.getAll();
+        const notes = MeasurementStore.getAllNotes();
+        if (!all.length && !notes.length) { UI.showToast('No hay mediciones ni notas para exportar', 'warning'); return; }
+
         const rows = ['Slice,Tipo,Valor,Unidad,Detalle'];
         all.sort((a, b) => a.sliceIndex - b.sliceIndex).forEach(m => {
             let val = '', unit = '', detail = '';
@@ -78,6 +80,17 @@ const Export = {
             }
             rows.push(`${m.sliceIndex + 1},${m.type},${val},${unit},"${detail}"`);
         });
+
+        if (notes.length) {
+            rows.push('');
+            rows.push('NOTAS CLÍNICAS');
+            rows.push('Slice,Nota');
+            notes.forEach(n => {
+                const safe = (n.text || '').replace(/"/g, '""');
+                rows.push(`${n.sliceIndex + 1},"${safe}"`);
+            });
+        }
+
         this._download(new Blob([rows.join('\n')], { type: 'text/csv' }), 'mediciones.csv');
         UI.showToast('Mediciones exportadas como CSV', 'success');
     },
@@ -115,10 +128,11 @@ const Export = {
         };
 
         // ── Determinar qué slices capturar ──────────────────────────
-        // Si hay mediciones: capturar solo los slices anotados.
-        // Si no hay: capturar solo el slice actual (fallback).
-        const annotatedIdxs = all.length
-            ? [...new Set(all.map(m => m.sliceIndex))].sort((a, b) => a - b)
+        // Unión de slices con mediciones y slices con notas clínicas.
+        // Si no hay ninguno: solo el slice actual (fallback).
+        const noteIdxs = MeasurementStore.getAllNotes().map(n => n.sliceIndex);
+        const annotatedIdxs = (all.length || noteIdxs.length)
+            ? [...new Set([...all.map(m => m.sliceIndex), ...noteIdxs])].sort((a, b) => a - b)
             : [s.sliceIndex];
 
         const series      = SeriesPanel.getSeries();
@@ -141,7 +155,9 @@ const Export = {
                 rd.onload = () => r(rd.result);
                 rd.readAsDataURL(blob);
             });
-            captures.push({ idx, b64, measurements: all.filter(m => m.sliceIndex === idx) });
+            captures.push({ idx, b64,
+                measurements: all.filter(m => m.sliceIndex === idx),
+                note: MeasurementStore.getNote(idx) });
         }
 
         // ── Restaurar slice original ─────────────────────────────────
@@ -150,18 +166,21 @@ const Export = {
         viewport.render();
 
         // ── Construir secciones por slice ───────────────────────────
-        const sliceSections = captures.map(({ idx, b64, measurements }) => {
+        const sliceSections = captures.map(({ idx, b64, measurements, note }) => {
             const mRows = measurements.map(m =>
                 `<tr><td>${typeEs[m.type] || m.type}</td><td>${fmtVal(m)}</td></tr>`
             ).join('');
             const mTable = mRows
                 ? `<table><thead><tr><th>Tipo</th><th>Valor</th></tr></thead><tbody>${mRows}</tbody></table>`
                 : '';
+            const noteBlock = note
+                ? `<div class="slice-note"><strong>Nota clínica:</strong><br>${note.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`
+                : '';
             return `
 <div class="slice-block">
   <h2>Slice ${idx + 1}</h2>
   <img src="${b64}" alt="Slice ${idx + 1}">
-  ${mTable}
+  ${noteBlock}${mTable}
 </div>`;
         }).join('\n');
 
@@ -183,6 +202,7 @@ const Export = {
   td{padding:6px 10px;border-bottom:1px solid #e0e0e0}
   tr:last-child td{border-bottom:none}tr:nth-child(even) td{background:#f9f9f9}
   footer{font-size:11px;color:#aaa;text-align:center;margin-top:32px}
+  .slice-note{background:#fffbe6;border-left:4px solid #f0ad00;padding:10px 14px;margin:8px 0 12px;font-size:13px;border-radius:4px;white-space:pre-wrap;line-height:1.5}
 </style></head><body>
 <h1>Informe de Imagen TAC</h1>
 <p style="font-size:12px;color:#888;margin:2px 0 16px">Generado: ${date}</p>

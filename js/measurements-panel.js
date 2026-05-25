@@ -35,22 +35,29 @@ const MeasurementsPanel = {
         const body = document.getElementById('mpBody');
         if (!body) return;
 
-        const all = MeasurementStore.getAll();
-        if (!all.length) {
+        const all   = MeasurementStore.getAll();
+        const notes = MeasurementStore.getAllNotes();
+
+        if (!all.length && !notes.length) {
             body.innerHTML = '<div class="mp-empty">No hay mediciones en este estudio</div>';
             return;
         }
 
+        // Unión de slices con mediciones y slices con notas
         const bySlice = new Map();
         all.forEach(m => {
             if (!bySlice.has(m.sliceIndex)) bySlice.set(m.sliceIndex, []);
             bySlice.get(m.sliceIndex).push(m);
         });
+        notes.forEach(n => { if (!bySlice.has(n.sliceIndex)) bySlice.set(n.sliceIndex, []); });
 
         const sortedSlices = [...bySlice.keys()].sort((a, b) => a - b);
 
         body.innerHTML = sortedSlices.map(sliceIdx => {
-            const items = bySlice.get(sliceIdx);
+            const items = bySlice.get(sliceIdx) || [];
+            const note  = MeasurementStore.getNote(sliceIdx);
+            const badge = note ? ' <span class="mp-note-badge" title="Tiene nota clínica">📝</span>' : '';
+
             const rows = items.map(m => {
                 const { val, unit } = this._formatValue(m);
                 const label = this._typeLabel(m.type);
@@ -66,9 +73,26 @@ const MeasurementsPanel = {
                     </span>
                 </div>`;
             }).join('');
+
+            const noteText = this._escapeHtml(note?.text ?? '');
+            const charCount = (note?.text ?? '').length;
+            const clearBtn = note ? `<button class="mp-note-clear" data-note-clear="${sliceIdx}">× borrar</button>` : '';
+            const noteArea = `
+            <div class="mp-note-area" data-note-slice="${sliceIdx}">
+                <textarea class="mp-note-textarea" data-note-slice="${sliceIdx}"
+                    placeholder="Nota clínica para este slice…" rows="3">${noteText}</textarea>
+                <div class="mp-note-footer">
+                    <span class="mp-note-counter" data-note-counter="${sliceIdx}">${charCount} car.</span>
+                    ${clearBtn}
+                </div>
+            </div>`;
+
+            const count = items.length;
+            const countLabel = count ? ` · ${count} medición${count !== 1 ? 'es' : ''}` : '';
             return `
-            <div class="mp-slice-header" data-goto="${sliceIdx}">Slice ${sliceIdx + 1} · ${items.length} medición${items.length !== 1 ? 'es' : ''}</div>
-            ${rows}`;
+            <div class="mp-slice-header" data-goto="${sliceIdx}">Slice ${sliceIdx + 1}${countLabel}${badge}</div>
+            ${rows}
+            ${noteArea}`;
         }).join('');
 
         body.querySelectorAll('[data-goto]').forEach(el => {
@@ -82,9 +106,45 @@ const MeasurementsPanel = {
             });
         });
 
+        this._bindNoteEvents(body);
+
         // Sección de volumetría (si hay ROI libres)
         const freehandAll = all.filter(m => m.type === 'freehand');
         if (freehandAll.length) this._renderVolumeSection(body, freehandAll);
+    },
+
+    _bindNoteEvents(body) {
+        body.querySelectorAll('textarea[data-note-slice]').forEach(ta => {
+            const sliceIdx = parseInt(ta.dataset.noteSlice);
+
+            // Solo actualizar el contador durante la escritura — sin guardar ni re-renderizar.
+            // Guardar durante el input dispara refresh() → body.innerHTML se reconstruye
+            // → el textarea se destruye → foco perdido a los ~600ms.
+            ta.addEventListener('input', () => {
+                const counter = body.querySelector(`[data-note-counter="${sliceIdx}"]`);
+                if (counter) counter.textContent = `${ta.value.length} car.`;
+            });
+
+            // Guardar al salir del textarea (foco ya perdido → refresh() no interfiere)
+            ta.addEventListener('blur', () => {
+                MeasurementStore.setNote(sliceIdx, ta.value);
+                ViewportLayout.getActive()?.render();
+            });
+
+            ta.addEventListener('keydown', (e) => e.stopPropagation());
+        });
+
+        body.querySelectorAll('[data-note-clear]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                MeasurementStore.setNote(parseInt(btn.dataset.noteClear), '');
+                ViewportLayout.getActive()?.render();
+            });
+        });
+    },
+
+    _escapeHtml(str) {
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     },
 
     _renderVolumeSection(body, freehandAll) {

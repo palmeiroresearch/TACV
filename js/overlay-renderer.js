@@ -33,6 +33,7 @@ const OverlayRenderer = {
         }
         this.drawLiveMeasurement(viewport);
         if (viewport.state.abMode) this.drawAbSplit(viewport);
+        this.drawNoteIndicator(viewport);
     },
 
     /* ── Sincronizar tamaño overlay = canvas WebGL ──── */
@@ -412,6 +413,22 @@ const OverlayRenderer = {
     _drawEndpointDot(ctx, p, color) {
         ctx.fillStyle = color;
         ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+    },
+
+    /* ── Indicador de nota clínica en overlay ───────────── */
+    drawNoteIndicator(viewport) {
+        if (viewport.mprPlane && viewport.mprPlane !== 'axial') return;
+        if (!MeasurementStore.hasNote(viewport.state.sliceIndex)) return;
+        const ctx = viewport.overlayCtx;
+        const ch  = viewport.overlayCanvas.height;
+        ctx.save();
+        ctx.font         = '13px sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle    = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(6, ch - 28, 24, 20);
+        ctx.fillStyle = '#fff';
+        ctx.fillText('📝', 8, ch - 18);
+        ctx.restore();
     },
 
     /* ── Medición en progreso (mientras el usuario dibuja) ── */
