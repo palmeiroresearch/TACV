@@ -158,6 +158,7 @@ class Viewport {
         if (typeof HistogramPanel !== 'undefined' && this === ViewportLayout.getActive()) {
             HistogramPanel.redraw();
         }
+        if (typeof Loupe !== 'undefined' && Loupe.isActive(this)) Loupe.refresh(this);
 
         // TV denoising: lanzar worker si está activo y no hay resultado para el frame actual
         if (this.state.tvEnabled && this.state.frame && !this._tvBusy && !this._tvDenoisedPixels) {

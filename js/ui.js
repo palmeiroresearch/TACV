@@ -84,6 +84,10 @@ const UI = {
                 if (series.length > 0) {
                     ViewportLayout.loadSeriesInAll(series, SeriesPanel.getActiveIndex());
                 }
+                // Lupa solo disponible en 1x1; cerrar y ocultar en otros layouts
+                const is1x1 = layout === '1x1';
+                document.getElementById('btnLoupe')?.classList.toggle('layout-hidden', !is1x1);
+                if (!is1x1 && typeof Loupe !== 'undefined') Loupe.close();
             });
         });
 
@@ -113,6 +117,11 @@ const UI = {
         document.getElementById('btnTV')?.addEventListener('click',          () => ViewportLayout.getActive()?.toggleTV());
         document.getElementById('btnAnonymize')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleAnonymize());
         document.getElementById('btnAbMode')?.addEventListener('click', () => ViewportLayout.getActive()?.toggleAbMode());
+        document.getElementById('btnLoupe')?.addEventListener('click', () => {
+            const vp = ViewportLayout.getActive();
+            if (Loupe.isActive(vp)) Loupe.close();
+            else Loupe.open(vp);
+        });
 
         // Zoom panel
         this._wireZoomPanel();
