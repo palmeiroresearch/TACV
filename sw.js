@@ -9,7 +9,7 @@
    - Message: SKIP_WAITING para activar update aprobado por usuario
    ============================================================ */
 
-const CACHE_VERSION = 'v1.4.5';
+const CACHE_VERSION = 'v1.4.6';
 const CACHE_NAME    = `tac-viewer-${CACHE_VERSION}`;
 
 const ASSETS = [
