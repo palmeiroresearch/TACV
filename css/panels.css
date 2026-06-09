@@ -853,6 +853,51 @@ kbd.shortcut-key {
 }
 .cl-case-open:hover { opacity: 0.85; }
 
+/* ── Label de diagnóstico por caso ───────────────────── */
+.cl-case-label-row {
+    display: flex; align-items: center; gap: 5px;
+    margin-top: 4px;
+    min-height: 18px;
+}
+.cl-case-label {
+    flex: 1;
+    font-size: 11px;
+    color: var(--brand-accent);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cl-case-label--empty .cl-label-placeholder {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+.cl-label-edit {
+    flex-shrink: 0;
+    background: none; border: none;
+    color: var(--text-tertiary);
+    font-size: 12px; cursor: pointer;
+    padding: 0 2px; line-height: 1;
+    opacity: 0;
+    transition: opacity var(--fast), color var(--fast);
+}
+.cl-case:hover .cl-label-edit { opacity: 1; }
+.cl-label-edit:hover { color: var(--brand-accent); }
+.cl-label-input {
+    flex: 1;
+    background: rgba(40,40,40,0.95);
+    color: var(--text-primary);
+    border: 1px solid var(--brand-accent);
+    border-radius: var(--radius-sm);
+    font-size: 11px; padding: 2px 6px;
+    height: 20px; outline: none;
+}
+.cl-label-save {
+    flex-shrink: 0;
+    background: var(--brand-accent); color: #0b1120;
+    border: none; border-radius: var(--radius-sm);
+    font-size: 11px; font-weight: 700;
+    padding: 1px 7px; height: 20px; cursor: pointer;
+}
+.cl-label-save:hover { opacity: 0.85; }
+
 .cl-footer {
     display: flex; align-items: center; gap: 8px;
     padding: 9px 12px;

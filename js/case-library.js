@@ -90,7 +90,7 @@ const CaseLibrary = (() => {
     async function _openFolder() {
         if (window.showDirectoryPicker) {
             try {
-                const handle = await window.showDirectoryPicker({ mode: 'read' });
+                const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
                 _rootDir = handle;
                 Storage.saveRootHandle(handle);
                 await _indexFromDirHandle(handle);
@@ -171,7 +171,15 @@ const CaseLibrary = (() => {
         if (!firstFile) return null;
 
         const meta = DicomBridge.parseHeaderOnly(await firstFile.slice(0, 131072).arrayBuffer());
-        return _makeEntry(folderName, meta, maxCount, mainHandle);
+
+        // Leer metadatos del caso si existen (tac-meta.json en la carpeta del paciente)
+        let caseMeta = {};
+        try {
+            const metaFH = await patientHandle.getFileHandle('tac-meta.json');
+            caseMeta = JSON.parse(await (await metaFH.getFile()).text());
+        } catch (_) {}
+
+        return _makeEntry(folderName, meta, maxCount, mainHandle, caseMeta);
     }
 
     /* ── Indexar via webkitdirectory FileList ─────────── */
@@ -324,7 +332,8 @@ const CaseLibrary = (() => {
                 e.patientName.toLowerCase().includes(q) ||
                 e.studyDateFmt.includes(q) ||
                 e.studyDate.includes(q) ||
-                e.studyType.toLowerCase().includes(q))
+                e.studyType.toLowerCase().includes(q) ||
+                (e.label || '').toLowerCase().includes(q))
             : _index;
 
         if (count) {
@@ -339,19 +348,78 @@ const CaseLibrary = (() => {
         }
 
         body.innerHTML = filtered.map(e => `
-            <div class="cl-case">
+            <div class="cl-case" data-folder="${_esc(e.folderName)}">
                 <div class="cl-case-info">
                     <div class="cl-case-name">${_esc(e.patientName)}</div>
                     ${e.studyType ? `<div class="cl-case-type">${_esc(e.studyType)}</div>` : ''}
                     <div class="cl-case-meta">${e.studyDateFmt || '—'} · ${e.sliceCount} sl</div>
+                    <div class="cl-case-label-row">
+                        <span class="cl-case-label${e.label ? '' : ' cl-case-label--empty'}">
+                            ${e.label ? `🏷 ${_esc(e.label)}` : '<span class="cl-label-placeholder">+ Diagnóstico</span>'}
+                        </span>
+                        <button class="cl-label-edit" title="Editar diagnóstico">✎</button>
+                    </div>
                 </div>
                 <button class="cl-case-open">Abrir</button>
             </div>`).join('');
 
         body.querySelectorAll('.cl-case').forEach((row, i) => {
-            const open = row.querySelector('.cl-case-open');
-            open?.addEventListener('click', (e) => { e.stopPropagation(); _loadCase(filtered[i]); });
+            row.querySelector('.cl-case-open')?.addEventListener('click', (e) => {
+                e.stopPropagation(); _loadCase(filtered[i]);
+            });
             row.addEventListener('dblclick', () => _loadCase(filtered[i]));
+            _bindLabelEdit(row, filtered, i);
+        });
+    }
+
+    /* ── Edición de label in-place (sin re-renderizar la lista) ── */
+    function _bindLabelEdit(row, list, idx) {
+        row.querySelector('.cl-label-edit')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const labelRow = row.querySelector('.cl-case-label-row');
+            const cur = list[idx].label || '';
+
+            labelRow.innerHTML = `
+                <input class="cl-label-input" type="text" value="${_esc(cur)}"
+                       placeholder="Diagnóstico / hallazgo principal" maxlength="120">
+                <button class="cl-label-save" type="button">✓</button>`;
+            const input = labelRow.querySelector('.cl-label-input');
+            input.focus(); input.select();
+
+            // Restaura la fila de label in-place con el valor indicado
+            const restore = (v) => {
+                list[idx].label = v;
+                labelRow.innerHTML = `
+                    <span class="cl-case-label${v ? '' : ' cl-case-label--empty'}">
+                        ${v ? `🏷 ${_esc(v)}` : '<span class="cl-label-placeholder">+ Diagnóstico</span>'}
+                    </span>
+                    <button class="cl-label-edit" title="Editar diagnóstico">✎</button>`;
+                _bindLabelEdit(row, list, idx);
+            };
+
+            let committed = false;
+            const commit = () => {
+                if (committed) return;
+                committed = true;
+                const v = input.value.trim();
+                restore(v);
+                _saveCaseLabel(list[idx].folderName, v);
+            };
+            const cancel = () => {
+                if (committed) return;
+                committed = true;
+                restore(cur); // descarta cambios sin guardar
+            };
+
+            labelRow.querySelector('.cl-label-save').addEventListener('click', (ev) => {
+                ev.stopPropagation(); commit();
+            });
+            input.addEventListener('keydown', (ev) => {
+                ev.stopPropagation();
+                if (ev.key === 'Enter')  { ev.preventDefault(); commit();  return; }
+                if (ev.key === 'Escape') { ev.preventDefault(); cancel();  return; }
+            });
+            input.addEventListener('blur', () => setTimeout(commit, 150));
         });
     }
 
@@ -370,7 +438,7 @@ const CaseLibrary = (() => {
     }
 
     /* ── Helpers ──────────────────────────────────────── */
-    function _makeEntry(folderName, meta, sliceCount, handle) {
+    function _makeEntry(folderName, meta, sliceCount, handle, caseMeta = {}) {
         return {
             folderName,
             patientName:  _fmtName(meta?.patientName || folderName),
@@ -379,8 +447,20 @@ const CaseLibrary = (() => {
             studyType:    _fmtStudyType(meta?.studyDesc, meta?.bodyPart, meta?.modality),
             seriesDesc:   meta?.seriesDesc || '',
             sliceCount,
+            label:        caseMeta.label ?? '',
             _handle: handle,
         };
+    }
+
+    function _saveCaseLabel(folderName, label) {
+        // 1. Actualizar índice en memoria
+        const entry = _index.find(c => c.folderName === folderName);
+        if (entry) entry.label = label;
+
+        // 2. Persistir en IDB (siempre, incluso en mobile)
+        // tac-meta.json se escribe solo al re-indexar (botón ⟳), no aquí,
+        // para que herramientas de live-reload no detecten el cambio y recarguen la página.
+        Storage.saveLibraryIndex(_index.map(({ _handle, ...rest }) => rest));
     }
 
     function _finalize(entries) {

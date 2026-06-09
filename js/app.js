@@ -361,6 +361,8 @@ function applySession(session) {
 }
 
 /* ── Service Worker ─────────────────────────────────────── */
+let _swUpdateApproved = false;   // true solo cuando el usuario aprueba el update
+
 function registerSW() {
     if (!('serviceWorker' in navigator)) return;
 
@@ -393,9 +395,11 @@ function registerSW() {
         })
         .catch((err) => console.warn('[SW] Registro fallido:', err));
 
-    // Cuando el nuevo SW toma control → recargar para usar los assets nuevos
+    // Recargar SOLO cuando el usuario aprobó el update explícitamente.
+    // Sin esta guarda, eventos controllerchange no aprobados (primera instalación,
+    // activaciones accidentales) causan pérdida de estado sin aviso.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
+        if (_swUpdateApproved) window.location.reload();
     });
 }
 
@@ -409,6 +413,7 @@ function _showUpdateBanner(registration) {
 
     const doUpdate = () => {
         banner.classList.add('hidden');
+        _swUpdateApproved = true;   // marcar antes de SKIP_WAITING
         registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
     };
     const dismiss = () => banner.classList.add('hidden');
