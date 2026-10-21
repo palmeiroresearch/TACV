@@ -1,0 +1,419 @@
+/* ============================================================
+   INVESTIGACIÓN — indicador permanente, panel de resultados
+   y bloqueo visual del procesamiento.
+   ============================================================ */
+
+/* ── Indicador permanente en pantalla ───────────────────────
+   Fijo, por encima de todo y sin pointer-events: tiene que verse
+   siempre que el modo esté activo, sin estorbar la interacción. */
+.research-indicator {
+    position: fixed;
+    top: calc(var(--toolbar-height) + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: rgba(6, 95, 70, 0.92);
+    border: 1px solid #00ff9d;
+    box-shadow: 0 2px 14px rgba(0, 255, 157, 0.25), var(--shadow-md);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #d1fae5;
+    pointer-events: none;
+    white-space: nowrap;
+    max-width: calc(100vw - 24px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.research-indicator.hidden { display: none; }
+
+.research-indicator .ri-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #00ff9d;
+    box-shadow: 0 0 6px #00ff9d;
+    flex: 0 0 auto;
+    animation: riPulse 2.4s ease-in-out infinite;
+}
+@keyframes riPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
+.research-indicator .ri-sub {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: rgba(209, 250, 229, 0.72);
+    text-transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .research-indicator .ri-dot { animation: none; }
+}
+
+@media (max-width: 599px) {
+    .research-indicator { font-size: 10px; padding: 4px 10px; gap: 6px; }
+    .research-indicator .ri-sub { display: none; }
+}
+
+/* ── Botón de modo investigación ────────────────────────────── */
+.tool-btn.btn-research {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+.tool-btn.btn-research.on {
+    background: rgba(6, 95, 70, 0.9);
+    border-color: #00ff9d;
+    color: #a7f3d0;
+}
+
+/* ── Controles bloqueados por el modo investigación ─────────── */
+.tool-btn.research-locked,
+.tool-btn.research-locked:hover {
+    opacity: 0.32;
+    cursor: not-allowed;
+    filter: grayscale(1);
+}
+.fp-section.fp-locked {
+    opacity: 0.4;
+    pointer-events: none;
+}
+.fp-research-note {
+    margin: 0 0 4px;
+    padding: 8px 12px;
+    background: rgba(6, 95, 70, 0.22);
+    border-left: 3px solid #00ff9d;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #a7f3d0;
+}
+
+/* Separador de secciones en la tabla de atajos */
+.shortcut-sep {
+    padding-top: 12px !important;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brand-accent);
+}
+
+/* ── Panel de investigación ─────────────────────────────────── */
+.research-panel {
+    position: fixed;
+    z-index: 2600;
+    width: 480px;
+    max-width: calc(100vw - 16px);
+    max-height: min(78vh, 760px);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+.research-panel.hidden { display: none; }
+
+.rp-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+}
+.rp-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rp-header-btn {
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background var(--fast), color var(--fast);
+}
+.rp-header-btn:hover {
+    background: var(--brand-primary);
+    color: #fff;
+}
+
+/* ── Configuración: código de caso, lector, umbrales ────────── */
+.rp-config {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+.rp-field label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+    margin-bottom: 4px;
+}
+.rp-field-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.rp-field input[type="text"],
+.rp-field input[type="number"] {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+}
+.rp-field input[type="number"] {
+    max-width: 88px;
+    flex: 0 1 88px;
+}
+.rp-field input:focus {
+    outline: none;
+    border-color: var(--brand-accent);
+}
+.rp-field-hint {
+    margin-top: 3px;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--text-tertiary);
+}
+.rp-btn-mini {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+}
+.rp-btn-mini:hover {
+    background: var(--brand-primary);
+    color: #fff;
+}
+
+/* ── Cuerpo con resultados ──────────────────────────────────── */
+.rp-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 4px 0 10px;
+}
+.rp-section {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+.rp-section:last-child { border-bottom: none; }
+.rp-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brand-accent);
+    margin-bottom: 8px;
+}
+
+.rp-empty {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-style: italic;
+    padding: 4px 0;
+}
+.rp-dim  { color: var(--text-tertiary); font-weight: 400; }
+.rp-ok   { color: var(--success); }
+.rp-warn { color: var(--warning); }
+
+.rp-alert {
+    margin: 8px 12px;
+    padding: 7px 10px;
+    background: rgba(245, 158, 11, 0.12);
+    border-left: 3px solid var(--warning);
+    border-radius: 3px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #fcd34d;
+}
+
+/* ── Tabla de NWU por corte ─────────────────────────────────── */
+.rp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+.rp-table th {
+    text-align: left;
+    padding: 4px 5px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+}
+.rp-table td {
+    padding: 5px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.rp-table tr:last-child td { border-bottom: none; }
+.rp-table .rp-nwu {
+    font-weight: 700;
+    color: var(--brand-accent);
+}
+
+/* ── NWU global ─────────────────────────────────────────────── */
+.rp-global {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+.rp-global-main {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--brand-accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+.rp-global-empty .rp-global-main { color: var(--text-tertiary); }
+.rp-global-sub {
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+/* ── Pares clave/valor ──────────────────────────────────────── */
+.rp-kv {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 11px;
+}
+.rp-kv > span:first-child {
+    flex: 1 1 auto;
+    color: var(--text-secondary);
+}
+.rp-kv > strong {
+    flex: 0 0 auto;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.rp-kv-total {
+    margin-top: 5px;
+    padding-top: 7px;
+    border-top: 1px solid var(--border-strong);
+    font-size: 12px;
+}
+.rp-kv-total > strong {
+    color: var(--brand-accent);
+    font-weight: 800;
+}
+
+.rp-hint {
+    margin-top: 7px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-tertiary);
+}
+
+.rp-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 7px;
+}
+.rp-btn {
+    padding: 4px 9px;
+    font-size: 11px;
+    font-family: inherit;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background var(--fast), color var(--fast);
+}
+.rp-btn:hover {
+    background: var(--brand-primary);
+    color: #fff;
+}
+.rp-btn.active {
+    background: var(--brand-accent-dark);
+    border-color: var(--brand-accent);
+    color: #041e14;
+    font-weight: 700;
+}
+
+/* ── Volumen: avisos y ABC/2 en el panel de mediciones ──────── */
+.mp-vol-warn {
+    display: block;
+    margin-top: 6px;
+    padding: 5px 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border-left: 3px solid var(--warning);
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #fcd34d;
+}
+.mp-vol-pending {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+.mp-vol-dim {
+    display: block;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    font-size: 10px;
+}
+
+@media (max-width: 599px) {
+    .research-panel {
+        width: 100vw;
+        max-width: 100vw;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: var(--statusbar-height);
+        top: auto !important;
+        max-height: 72dvh;
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+    .rp-table { font-size: 10px; }
+    .rp-table th,
+    .rp-table td { padding: 4px 3px; }
+}

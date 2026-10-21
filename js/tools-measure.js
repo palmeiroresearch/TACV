@@ -97,7 +97,8 @@ ToolHandlers[TOOL_IDS.ELLIPSE] = {
         const stats = f ? MeasurementStore.computeEllipseStats(
             f.pixelData, f.rows, f.cols,
             { cx: live.cx, cy: live.cy, rx: live.rx, ry: live.ry },
-            f.pixelSpacing, f.rescaleSlope, f.rescaleIntercept
+            f.pixelSpacing, f.rescaleSlope, f.rescaleIntercept,
+            MeasurementStore._measureOpts(f)
         ) : null;
         MeasurementStore.add(viewport.state.sliceIndex, { ...live, stats });
         viewport.state.liveMeasurement = null;
@@ -128,7 +129,8 @@ ToolHandlers[TOOL_IDS.RECTANGLE] = {
         const stats = f ? MeasurementStore.computeRectStats(
             f.pixelData, f.rows, f.cols,
             { x1: live.x1, y1: live.y1, x2: live.x2, y2: live.y2 },
-            f.pixelSpacing, f.rescaleSlope, f.rescaleIntercept
+            f.pixelSpacing, f.rescaleSlope, f.rescaleIntercept,
+            MeasurementStore._measureOpts(f)
         ) : null;
         MeasurementStore.add(viewport.state.sliceIndex, { ...live, stats });
         viewport.state.liveMeasurement = null;
@@ -198,7 +200,8 @@ ToolHandlers[TOOL_IDS.FREEHAND] = {
         pts.push({ ...pts[0] });
         const f     = viewport.state.frame;
         const stats = f ? MeasurementStore.computeFreehandStats(
-            f.pixelData, f.rows, f.cols, pts, f.pixelSpacing, f.rescaleSlope, f.rescaleIntercept
+            f.pixelData, f.rows, f.cols, pts, f.pixelSpacing, f.rescaleSlope, f.rescaleIntercept,
+            MeasurementStore._measureOpts(f)
         ) : null;
         MeasurementStore.add(viewport.state.sliceIndex, { type: 'freehand', points: pts, stats });
         viewport.state.liveMeasurement = null;

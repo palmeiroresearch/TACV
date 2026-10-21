@@ -10,15 +10,11 @@ const MeasurementsPanel = {
     open() {
         const panel = document.getElementById('measurementsPanel');
         if (!panel) return;
-        const btn  = document.getElementById('btnMeasurementsPanel');
-        const rect = btn?.getBoundingClientRect();
-        if (rect) {
-            panel.style.top   = (rect.bottom + 6) + 'px';
-            panel.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
-            panel.style.left  = 'auto';
-        }
+        // Con el botón oculto por el personalizador, el atajo M abría el panel
+        // fuera de la pantalla: anchorPanel cae a una esquina si no hay ancla.
+        UI.anchorPanel(panel, ['btnMeasurementsPanel']);
         panel.classList.remove('hidden');
-        btn?.classList.add('active');
+        document.getElementById('btnMeasurementsPanel')?.classList.add('active');
         this._open = true;
         this.refresh();
     },
@@ -150,20 +146,21 @@ const MeasurementsPanel = {
     _renderVolumeSection(body, freehandAll) {
         const section = document.createElement('div');
         section.className = 'mp-vol-section';
+        const n1 = (v) => (v == null || !Number.isFinite(v)) ? '—' : v.toFixed(1);
 
         const rows = freehandAll
             .sort((a, b) => a.sliceIndex - b.sliceIndex)
             .map(m => {
-                const area = m.stats?.area != null ? `${m.stats.area} mm²` : '—';
+                const a = m.stats?.areaTotalMm2 ?? m.stats?.area;
                 return `<label class="mp-vol-row">
                     <input type="checkbox" data-vol-id="${m.id}" checked>
                     <span class="mp-vol-slice">Slice ${m.sliceIndex + 1}</span>
-                    <span class="mp-vol-area">${area}</span>
+                    <span class="mp-vol-area">${n1(a)} mm²</span>
                 </label>`;
             }).join('');
 
         section.innerHTML = `
-            <div class="mp-vol-title">Volumetría por integración</div>
+            <div class="mp-vol-title">Volumen por planimetría</div>
             <div class="mp-vol-rows">${rows}</div>
             <button class="mp-vol-btn" id="btnCalcVolume">Calcular Volumen</button>
             <div class="mp-vol-result hidden" id="mpVolResult"></div>`;
@@ -179,22 +176,52 @@ const MeasurementsPanel = {
             const frames   = SeriesPanel.getSeries();
             const result   = MeasurementStore.computeVolume(selected, frames);
             const res      = section.querySelector('#mpVolResult');
-            if (!result) { res.textContent = 'Error calculando volumen'; res.classList.remove('hidden'); return; }
+            if (!result) {
+                res.textContent = 'Error calculando volumen';
+                res.classList.remove('hidden');
+                return;
+            }
 
-            const mL = result.mL.toFixed(2);
-            let html = `<span class="mp-vol-main">${mL} mL</span>
-                        <span class="mp-vol-sub">${result.sliceCount} slice${result.sliceCount !== 1 ? 's' : ''} · trapezoidal</span>`;
+            const sp = result.spacing;
+            let html = `<span class="mp-vol-main">${result.mL.toFixed(2)} mL</span>
+                <span class="mp-vol-sub">${result.sliceCount} slice${
+                    result.sliceCount !== 1 ? 's' : ''} · espaciado ${n1(sp?.mean)} mm (${
+                    sp?.source === 'ImagePositionPatient' ? 'ImagePositionPatient' : sp?.source})</span>`;
 
-            // Estimación ABC/2 si es un solo slice (quick estimate)
-            if (result.sliceCount === 1) {
-                const m = selected[0];
-                const f = frames[m.sliceIndex];
-                if (f && m.stats) {
-                    const [rs, cs] = f.pixelSpacing || [1, 1];
-                    const equiv_r  = Math.sqrt(m.stats.area / Math.PI); // radio equivalente en mm
-                    const abc2     = (equiv_r * 2 * equiv_r * 2 * (f.sliceThickness || 5)) / 2000;
-                    html += `<span class="mp-vol-abc2">ABC/2 ≈ ${abc2.toFixed(1)} mL (1 slice)</span>`;
-                }
+            /* ── Ayudante ABC/2 ──────────────────────────────────
+               A y B las mide el usuario con la herramienta de ejes en el
+               corte de mayor área; C se deriva de los cortes con lesión.
+               La estimación por radio equivalente que había antes no era
+               ABC/2: suponía la lesión circular y usaba SliceThickness. */
+            const axes  = MeasurementStore.getAll().filter(m => m.type === 'abc_axis');
+            const lastA = [...axes].reverse().find(m => m.axis === 'A');
+            const lastB = [...axes].reverse().find(m => m.axis === 'B');
+            const sliceIdxs = [...new Set(selected.map(m => m.sliceIndex))].sort((a, b) => a - b);
+            const cInfo = ResearchCore.deriveC(sliceIdxs, frames);
+
+            // Corte donde deben medirse A y B
+            let bigIdx = null, bigArea = -1;
+            for (const m of selected) {
+                const a = m.stats?.areaTotalMm2 ?? m.stats?.area ?? 0;
+                if (a > bigArea) { bigArea = a; bigIdx = m.sliceIndex; }
+            }
+
+            if (lastA && lastB && cInfo.cMm != null) {
+                const abc = ResearchCore.abc2(lastA.distanceMm, lastB.distanceMm, cInfo.cMm);
+                html += `<span class="mp-vol-abc2">ABC/2 = ${abc.mL.toFixed(2)} mL
+                    <span class="mp-vol-dim">A ${n1(lastA.distanceMm)} × B ${
+                        n1(lastB.distanceMm)} × C ${n1(cInfo.cMm)} mm</span></span>`;
+            } else {
+                html += `<span class="mp-vol-abc2 mp-vol-pending">ABC/2: medí A y B con la
+                    herramienta de ejes (tecla B)${bigIdx != null
+                        ? ` en el corte de mayor área (slice ${bigIdx + 1})` : ''}.
+                    ${lastA ? `A = ${n1(lastA.distanceMm)} mm ya medida. ` : ''}
+                    C se deriva de los ${sliceIdxs.length} corte(s) con lesión${
+                        cInfo.cMm != null ? ` → ${n1(cInfo.cMm)} mm` : ''}.</span>`;
+            }
+
+            for (const w of (result.warnings || [])) {
+                html += `<span class="mp-vol-warn">${this._escapeHtml(w)}</span>`;
             }
 
             res.innerHTML = html;
@@ -203,13 +230,25 @@ const MeasurementsPanel = {
     },
 
     _formatValue(m) {
+        // Las estadísticas se guardan con precisión completa; aquí se redondea
+        // solo para mostrar.
+        const n1 = (v) => (v == null || !Number.isFinite(v)) ? '—' : v.toFixed(1);
         switch (m.type) {
             case 'distance':  return { val: m.distanceMm?.toFixed(2) ?? '—', unit: 'mm' };
             case 'angle':     return { val: m.angleDeg?.toFixed(1) ?? '—', unit: '°' };
             case 'cobb':      return { val: m.angleDeg?.toFixed(1) ?? '—', unit: '° Cobb' };
             case 'ellipse':
             case 'rectangle':
-            case 'freehand':  return { val: m.stats ? `${m.stats.mean}±${m.stats.std}` : '—', unit: 'HU' };
+            case 'freehand':  return { val: m.stats?.mean != null
+                                  ? `${n1(m.stats.mean)}±${n1(m.stats.std)}` : '—', unit: 'HU' };
+            case 'nwu_roi':   return { val: m.stats?.mean != null
+                                  ? `${m.role === 'lesion' ? 'L' : 'C'} ${n1(m.stats.mean)}±${n1(m.stats.std)}` +
+                                    (m.stats.excludedTotal ? ` (−${m.stats.excludedTotal})` : '')
+                                  : '—', unit: 'HU' };
+            case 'midline':   return { val: m.source === 'auto' ? 'auto (revisar)'
+                                  : (m.source === 'auto-adjusted' ? 'auto corregida' : 'manual'), unit: '' };
+            case 'septum':    return { val: n1(Math.abs(m.shiftMm)), unit: 'mm desv.' };
+            case 'abc_axis':  return { val: `${m.axis} ${n1(m.distanceMm)}`, unit: 'mm' };
             case 'arrow':     return { val: m.label || '(sin etiqueta)', unit: '' };
             case 'text':      return { val: m.text || '(vacío)', unit: '' };
             default:          return { val: '—', unit: '' };
@@ -218,11 +257,15 @@ const MeasurementsPanel = {
 
     _typeLabel(type) {
         return { distance: 'Dist', angle: 'Ángulo', ellipse: 'Elipse', rectangle: 'Rect',
-                 arrow: 'Flecha', text: 'Texto', cobb: 'Cobb', freehand: 'Libre' }[type] || type;
+                 arrow: 'Flecha', text: 'Texto', cobb: 'Cobb', freehand: 'Libre',
+                 nwu_roi: 'NWU', midline: 'Línea media', septum: 'Septum',
+                 abc_axis: 'Eje ABC' }[type] || type;
     },
 
     _typeColor(type) {
         return { distance: '#FFD700', angle: '#00CFFF', ellipse: '#FF6B35', rectangle: '#7CFC00',
-                 arrow: '#FF69B4', text: '#aaa', cobb: '#00E5FF', freehand: '#7CFC00' }[type] || '#888';
+                 arrow: '#FF69B4', text: '#aaa', cobb: '#00E5FF', freehand: '#7CFC00',
+                 nwu_roi: '#FF5252', midline: '#00FF9D', septum: '#E040FB',
+                 abc_axis: '#FFD700' }[type] || '#888';
     },
 };

@@ -31,6 +31,14 @@
     // Histogram panel
     HistogramPanel.init();
 
+    // Research panel — se inicializa antes que ResearchMode para que el
+    // modo pueda refrescarlo al restaurar su estado desde localStorage
+    ResearchPanel.init();
+
+    // Análisis automático de asimetría (no funciona en modo investigación)
+    DetectorPanel.init();
+    Detector.init();
+
     // Case library
     CaseLibrary.init();
 
@@ -40,6 +48,11 @@
     // Toolbar buttons
     UI.wireToolbar();
     UI.applySettings();
+
+    // Modo investigación — después de wireToolbar(), porque necesita que los
+    // controles de filtros existan para poder bloquearlos. Si estaba activo
+    // en la sesión anterior, se reaplica el bloqueo aquí.
+    ResearchMode.init();
 
     // Tool inicial
     ToolState.setTool(TOOL_IDS.POINTER);
@@ -170,6 +183,12 @@ function _snapshotViewportState(vp) {
 }
 
 function _restoreViewportState(vp, saved) {
+    // Con el modo investigación activo, restaurar el estado de una serie
+    // visitada antes NO puede reactivar procesamiento que altere valores.
+    const research = (typeof ResearchMode !== 'undefined') && ResearchMode.isActive();
+    const allow = (key, value) => (research && RESEARCH_BLOCKED_FILTERS.includes(key))
+        ? false : value;
+
     Object.assign(vp.state, {
         windowWidth:          saved.windowWidth,
         windowCenter:         saved.windowCenter,
@@ -182,16 +201,16 @@ function _restoreViewportState(vp, saved) {
         rotation:             saved.rotation ?? 0,
         colorMapId:           saved.colorMapId || 'grayscale',
         isMultiWindowEnabled: saved.isMultiWindowEnabled,
-        tvEnabled:            saved.tvEnabled,
         abMode:               saved.abMode,
-        isSuperResEnabled:    saved.isSuperResEnabled,
         isAnonymized:         saved.isAnonymized,
-        bicubicEnabled:       saved.bicubicEnabled,
-        usmEnabled:           saved.usmEnabled,
-        bilateralEnabled:     saved.bilateralEnabled,
-        anisoEnabled:         saved.anisoEnabled,
-        claheEnabled:         saved.claheEnabled,
-        retinexEnabled:       saved.retinexEnabled,
+        tvEnabled:         allow('tvEnabled',         saved.tvEnabled),
+        isSuperResEnabled: allow('isSuperResEnabled', saved.isSuperResEnabled),
+        bicubicEnabled:    allow('bicubicEnabled',    saved.bicubicEnabled),
+        usmEnabled:        allow('usmEnabled',        saved.usmEnabled),
+        bilateralEnabled:  allow('bilateralEnabled',  saved.bilateralEnabled),
+        anisoEnabled:      allow('anisoEnabled',      saved.anisoEnabled),
+        claheEnabled:      allow('claheEnabled',      saved.claheEnabled),
+        retinexEnabled:    allow('retinexEnabled',    saved.retinexEnabled),
     });
     // Sincronizar el preset select con el W/L restaurado
     const presetSel = document.getElementById('presetSelect');
@@ -255,6 +274,9 @@ function _activateSeries(idx) {
 
     MetadataPanel.show(series[0]);
     MprVolume.setSeries(series);
+
+    // Derivar el código de caso anonimizado del StudyInstanceUID de esta serie
+    ResearchPanel.onSeriesActivated(series[0]);
 
     // Forzar re-render de viewports MPR (coronal/sagital) para que reconstruyan
     // el volumen de la nueva serie — la textura 3D se re-sube en buildForContext.
@@ -404,6 +426,11 @@ function registerSW() {
 }
 
 function _showUpdateBanner(registration) {
+    // Con el modo investigación activo no se ofrece la actualización: se
+    // aparca hasta que el usuario lo desactive. Cambiar la versión de la app
+    // a mitad de una sesión de medición rompería la trazabilidad.
+    if (typeof ResearchMode !== 'undefined' && ResearchMode.deferSwUpdate(registration)) return;
+
     const banner = document.getElementById('swUpdateBanner');
     if (!banner || !banner.classList.contains('hidden')) return;
     banner.classList.remove('hidden');

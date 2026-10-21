@@ -117,83 +117,102 @@ const MeasurementStore = {
         return deg;
     },
 
-    computeEllipseStats(pixelData, rows, cols, ellipse, pixelSpacing, slope, intercept) {
+    /* ── Estadísticas de ROI ───────────────────────────────────
+       Todas las ROI —elipse, rectángulo, libre y las de NWU— pasan
+       por ResearchCore.maskStats: un único sitio donde se convierte
+       a UH, se excluye padding y se aplican umbrales.
+
+       Las estadísticas se guardan con PRECISIÓN COMPLETA. El redondeo
+       es responsabilidad de quien las muestra (ver _fmtHU en
+       overlay-renderer y measurements-panel): una media redondeada a
+       entero introduce hasta 1,5 puntos porcentuales de error en la NWU.
+       ───────────────────────────────────────────────────────── */
+
+    /**
+     * Opciones derivadas del frame que afectan a la medición:
+     * padding fuera del FOV y, opcionalmente, umbrales de UH.
+     */
+    _measureOpts(frame, opts = {}) {
+        return {
+            padding:           frame?.pixelPaddingValue ?? null,
+            paddingRangeLimit: frame?.pixelPaddingRangeLimit ?? null,
+            huMin:             opts.huMin ?? null,
+            huMax:             opts.huMax ?? null,
+        };
+    },
+
+    /** Añade el alias `area` que usan los sitios de visualización existentes. */
+    _withAreaAlias(st) {
+        return { ...st, area: st.areaMm2 };
+    },
+
+    computeEllipseStats(pixelData, rows, cols, ellipse, pixelSpacing, slope, intercept, opts = {}) {
         const { cx, cy, rx, ry } = ellipse;
-        const [rs, cs] = pixelSpacing || [1, 1];
-        const values = [];
-        const x0 = Math.max(0, Math.floor(cx - rx));
-        const x1 = Math.min(cols - 1, Math.ceil(cx + rx));
-        const y0 = Math.max(0, Math.floor(cy - ry));
-        const y1 = Math.min(rows - 1, Math.ceil(cy + ry));
-        for (let y = y0; y <= y1; y++) {
-            for (let x = x0; x <= x1; x++) {
+        const st = ResearchCore.maskStats({
+            pixelData, rows, cols, slope, intercept, pixelSpacing,
+            padding: opts.padding ?? null,
+            paddingRangeLimit: opts.paddingRangeLimit ?? null,
+            huMin: opts.huMin ?? null,
+            huMax: opts.huMax ?? null,
+            bbox: { x0: cx - rx, y0: cy - ry, x1: cx + rx, y1: cy + ry },
+            // Mismo criterio de pertenencia que antes: índice entero de píxel,
+            // para no alterar qué píxeles entraban en la ROI.
+            inside: (x, y) => {
                 const nx = (x - cx) / rx, ny = (y - cy) / ry;
-                if (nx * nx + ny * ny <= 1) {
-                    const raw = pixelData[y * cols + x];
-                    values.push(raw * slope + intercept);
-                }
-            }
-        }
-        return this._stats(values, rx, ry, cs, rs, 'ellipse');
-    },
-
-    computeRectStats(pixelData, rows, cols, rect, pixelSpacing, slope, intercept) {
-        const { x1, y1, x2, y2 } = rect;
-        const [rs, cs] = pixelSpacing || [1, 1];
-        const values = [];
-        const xi0 = Math.max(0, Math.min(x1, x2)), xi1 = Math.min(cols - 1, Math.max(x1, x2));
-        const yi0 = Math.max(0, Math.min(y1, y2)), yi1 = Math.min(rows - 1, Math.max(y1, y2));
-        for (let y = yi0; y <= yi1; y++) {
-            for (let x = xi0; x <= xi1; x++) {
-                const raw = pixelData[y * cols + x];
-                values.push(raw * slope + intercept);
-            }
-        }
-        const w = Math.abs(x2 - x1) * cs, h = Math.abs(y2 - y1) * rs;
-        return this._stats(values, null, null, cs, rs, 'rect', w, h);
-    },
-
-    computeFreehandStats(pixelData, rows, cols, points, pixelSpacing, slope, intercept) {
-        const [rs, cs] = pixelSpacing || [1, 1];
-        // Bounding box
-        let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-        points.forEach(p => {
-            if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x;
-            if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y;
+                return nx * nx + ny * ny <= 1;
+            },
         });
-        const values = [];
-        for (let y = Math.max(0, Math.floor(yMin)); y <= Math.min(rows - 1, Math.ceil(yMax)); y++) {
-            for (let x = Math.max(0, Math.floor(xMin)); x <= Math.min(cols - 1, Math.ceil(xMax)); x++) {
-                if (this._pointInPolygon(x + 0.5, y + 0.5, points)) {
-                    values.push(pixelData[y * cols + x] * slope + intercept);
-                }
-            }
-        }
-        // Área real del polígono = píxeles dentro × área de píxel (no bounding box)
-        const area_mm2 = values.length * cs * rs;
-        return this._stats(values, null, null, cs, rs, 'rect', area_mm2, 1);
+        return this._withAreaAlias(st);
     },
 
+    computeRectStats(pixelData, rows, cols, rect, pixelSpacing, slope, intercept, opts = {}) {
+        const { x1, y1, x2, y2 } = rect;
+        const st = ResearchCore.maskStats({
+            pixelData, rows, cols, slope, intercept, pixelSpacing,
+            padding: opts.padding ?? null,
+            paddingRangeLimit: opts.paddingRangeLimit ?? null,
+            huMin: opts.huMin ?? null,
+            huMax: opts.huMax ?? null,
+            bbox: { x0: Math.min(x1, x2), y0: Math.min(y1, y2),
+                    x1: Math.max(x1, x2), y1: Math.max(y1, y2) },
+            inside: () => true,
+        });
+        return this._withAreaAlias(st);
+    },
+
+    computeFreehandStats(pixelData, rows, cols, points, pixelSpacing, slope, intercept, opts = {}) {
+        const st = ResearchCore.maskStats({
+            pixelData, rows, cols, slope, intercept, pixelSpacing,
+            padding: opts.padding ?? null,
+            paddingRangeLimit: opts.paddingRangeLimit ?? null,
+            huMin: opts.huMin ?? null,
+            huMax: opts.huMax ?? null,
+            bbox: ResearchCore.polygonBounds(points),
+            inside: (x, y) => ResearchCore.pointInPolygon(x + 0.5, y + 0.5, points),
+        });
+        return this._withAreaAlias(st);
+    },
+
+    /**
+     * Estadísticas de una ROI poligonal de NWU: mismo rasterizador, con
+     * los umbrales de exclusión del estudio.
+     */
+    computeNwuRoiStats(frame, points, threshold = {}) {
+        if (!frame?.pixelData || !points?.length) return null;
+        const st = ResearchCore.maskStats({
+            pixelData: frame.pixelData, rows: frame.rows, cols: frame.cols,
+            slope: frame.rescaleSlope, intercept: frame.rescaleIntercept,
+            pixelSpacing: frame.pixelSpacing,
+            ...this._measureOpts(frame, threshold),
+            bbox: ResearchCore.polygonBounds(points),
+            inside: (x, y) => ResearchCore.pointInPolygon(x + 0.5, y + 0.5, points),
+        });
+        return this._withAreaAlias(st);
+    },
+
+    /** Conserva el nombre antiguo para no romper llamadas externas. */
     _pointInPolygon(x, y, pts) {
-        let inside = false;
-        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-            const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
-            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
-        }
-        return inside;
-    },
-
-    _stats(values, rx, ry, cs, rs, type, forcedW, forcedH) {
-        if (!values.length) return { mean: 0, std: 0, min: 0, max: 0, area: 0, count: 0 };
-        const n    = values.length;
-        const mean = values.reduce((a, b) => a + b, 0) / n;
-        const std  = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
-        const min  = Math.min(...values);
-        const max  = Math.max(...values);
-        const area = type === 'ellipse'
-            ? Math.PI * rx * cs * ry * rs
-            : (forcedW * forcedH);
-        return { mean: Math.round(mean), std: Math.round(std), min: Math.round(min), max: Math.round(max), area: Math.round(area), count: n };
+        return ResearchCore.pointInPolygon(x, y, pts);
     },
 
     /* ── Hit test — click cerca de una medición ──────── */
@@ -219,33 +238,120 @@ const MeasurementStore = {
             case 'cobb':      return (m.line1 && (near(m.line1.p1) || near(m.line1.p2))) ||
                                      (m.line2 && (near(m.line2.p1) || near(m.line2.p2)));
             case 'freehand':  return m.points?.some(p => Math.hypot(p.x - x, p.y - y) <= r * 2);
+            case 'midline':   return near(m.anterior) || near(m.posterior);
+            case 'abc_axis':  return near(m.p1) || near(m.p2);
+            case 'aspects_probe': return near(m.seed) ||
+                                     (m.points && ResearchCore.pointInPolygon(x, y, m.points));
+            case 'septum':    return near(m.pos);
+            case 'nwu_roi':   // dentro del polígono o justo sobre su contorno.
+                              // Radio ajustado (no r·2 como en 'freehand'): un
+                              // polígono de 180 puntos con margen holgado roba
+                              // clics a la línea media y al septum cercanos.
+                              return (m.points && ResearchCore.pointInPolygon(x, y, m.points)) ||
+                                     m.points?.some(p => Math.hypot(p.x - x, p.y - y) <= r);
             default:          return false;
         }
     },
 
-    /* ── Volumetría por integración trapezoidal ──────────── */
+    /* ── Volumetría por planimetría ────────────────────────
+       El espaciado entre cortes se calcula proyectando
+       ImagePositionPatient sobre la normal del corte, no con
+       SliceThickness: SliceThickness es el grosor del haz, no la
+       distancia entre centros, y difieren en cuanto hay huecos o
+       solapamiento. Devuelve avisos cuando los cortes no son
+       equidistantes o se solapan.
+       ───────────────────────────────────────────────────── */
     computeVolume(measurements, frames) {
-        const sorted = [...measurements].sort((a, b) => a.sliceIndex - b.sliceIndex);
-        const n = sorted.length;
-        if (!n) return null;
-        let vol = 0;
-        const z = (k) => {
-            const f = frames[sorted[k].sliceIndex];
-            return f?.sliceLocation ?? (sorted[k].sliceIndex * (f?.sliceThickness || 1));
-        };
-        for (let i = 0; i < n; i++) {
-            const m = sorted[i];
+        if (!measurements?.length) return null;
+
+        // Área encerrada por la ROI (no la de los píxeles que pasaron el
+        // umbral): el volumen de la lesión es su extensión geométrica.
+        const rois = measurements.map(m => ({
+            sliceIndex: m.sliceIndex,
+            areaMm2: m.stats?.areaTotalMm2 ?? m.stats?.areaMm2 ?? m.stats?.area ?? 0,
+        }));
+
+        const v = ResearchCore.planimetricVolume(rois, frames);
+        if (!v) return null;
+        // `sliceCount` se mantiene por compatibilidad con el panel existente
+        return { ...v, sliceCount: v.sliceCount };
+    },
+
+    /* ── Línea media por corte ─────────────────────────────
+       Se guarda como una medición de tipo 'midline', así hereda
+       la persistencia IDB, la caché por serie y el borrado.
+       Solo puede haber una por corte: definir una nueva reemplaza
+       la anterior.
+       ───────────────────────────────────────────────────── */
+    setMidline(sliceIndex, anterior, posterior, source = 'manual') {
+        const existing = this.getMidline(sliceIndex);
+        if (existing) {
+            this.update(existing.id, { anterior, posterior, source });
+            return this.getMidline(sliceIndex);
+        }
+        return this.add(sliceIndex, { type: 'midline', anterior, posterior, source });
+    },
+
+    getMidline(sliceIndex) {
+        return this.get(sliceIndex).find(m => m.type === 'midline') ?? null;
+    },
+
+    getAllMidlines() {
+        return this.getAll().filter(m => m.type === 'midline')
+                   .sort((a, b) => a.sliceIndex - b.sliceIndex);
+    },
+
+    /* ── Pares de ROI de NWU ───────────────────────────────── */
+
+    /** Pares {lesion, mirror} completos, ordenados por corte. */
+    getNwuPairs() {
+        const rois = this.getAll().filter(m => m.type === 'nwu_roi');
+        const byPair = new Map();
+        for (const r of rois) {
+            if (!byPair.has(r.pairId)) byPair.set(r.pairId, {});
+            byPair.get(r.pairId)[r.role] = r;
+        }
+        return [...byPair.entries()]
+            .map(([pairId, p]) => ({ pairId, lesion: p.lesion, mirror: p.mirror }))
+            .filter(p => p.lesion && p.mirror)
+            .sort((a, b) => a.lesion.sliceIndex - b.lesion.sliceIndex);
+    },
+
+    getNwuRoisForSlice(sliceIndex) {
+        return this.get(sliceIndex).filter(m => m.type === 'nwu_roi');
+    },
+
+    getSeptum(sliceIndex) {
+        return this.get(sliceIndex).find(m => m.type === 'septum') ?? null;
+    },
+
+    setSeptum(sliceIndex, pos, shiftMm) {
+        const existing = this.getSeptum(sliceIndex);
+        if (existing) {
+            this.update(existing.id, { pos, shiftMm });
+            return this.getSeptum(sliceIndex);
+        }
+        return this.add(sliceIndex, { type: 'septum', pos, shiftMm });
+    },
+
+    /**
+     * Recalcula las estadísticas de todas las ROI de NWU con un umbral
+     * nuevo. Se llama al editar el rango en el panel: el umbral forma
+     * parte de la medición, así que cambiarlo debe re-medir, no solo
+     * re-etiquetar.
+     */
+    recomputeNwuStats(frames, threshold) {
+        let updated = 0;
+        for (const m of this.getAll()) {
+            if (m.type !== 'nwu_roi') continue;
             const f = frames[m.sliceIndex];
             if (!f) continue;
-            const [rs, cs] = f.pixelSpacing || [1, 1];
-            const area = m.stats?.count ? m.stats.count * cs * rs : (m.stats?.area ?? 0);
-            const gap  = n === 1     ? (f.sliceThickness || 1)
-                       : i === 0     ? Math.abs(z(1)   - z(0))
-                       : i === n - 1 ? Math.abs(z(n-1) - z(n-2))
-                       :               Math.abs(z(i+1) - z(i-1)) / 2;
-            vol += area * gap;
+            const stats = this.computeNwuRoiStats(f, m.points, threshold);
+            Object.assign(m, { stats, threshold: { ...threshold } });
+            updated++;
         }
-        return { mm3: vol, mL: vol / 1000, sliceCount: n };
+        if (updated) this._persist();
+        return updated;
     },
 
     /* ── Contexto por serie ────────────────────────────── */

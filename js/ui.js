@@ -164,6 +164,10 @@ const UI = {
         // Measurements panel
         this._wireMeasurementsPanel();
 
+        // Investigación: el interruptor y el panel se conectan en
+        // ResearchMode.init() / ResearchPanel.init(), que corren después
+        // de wireToolbar() porque necesitan estos controles ya en el DOM.
+
         // Context menu
         this._wireContextMenu();
 
@@ -346,6 +350,15 @@ const UI = {
             const params = paramsId ? document.getElementById(paramsId) : null;
             if (!chk) return;
             chk.addEventListener('change', () => {
+                // Con el modo investigación activo, setFilter rechaza encender
+                // el filtro: hay que devolver el checkbox a su estado real.
+                if (chk.checked && typeof ResearchMode !== 'undefined' &&
+                    ResearchMode.isActive() && RESEARCH_BLOCKED_FILTERS.includes(stateKey)) {
+                    chk.checked = false;
+                    UI.showToast('Modo investigación activo: el procesamiento está bloqueado',
+                                 'warning', 3500);
+                    return;
+                }
                 ViewportLayout.getAll().forEach(vp => vp.setFilter(stateKey, chk.checked));
                 if (params) params.classList.toggle('visible', chk.checked);
             });
@@ -556,6 +569,9 @@ const UI = {
             if (!panel.contains(e.target) && e.target !== gearBtn) close();
         });
 
+        // Valores de fábrica: se aplican una sola vez por versión
+        this._tcApplyFactoryDefaults();
+
         // Aplicar estado guardado
         const hidden = this._tcGetHidden();
         this._tcApply(hidden);
@@ -573,11 +589,41 @@ const UI = {
         });
 
         document.getElementById('btnTcReset')?.addEventListener('click', () => {
-            this._tcSave(new Set());
-            this._tcApply(new Set());
-            panel.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = true);
-            UI.showToast('Barra restablecida', 'success', 2000);
+            // «Restablecer» vuelve a FÁBRICA, no a «todo visible»: lo que está
+            // oculto por defecto lo sigue estando.
+            const defaults = new Set(TOOLBAR_HIDDEN_BY_DEFAULT);
+            this._tcSave(defaults);
+            this._tcApply(defaults);
+            panel.querySelectorAll('input[type="checkbox"][data-cid]').forEach(c => {
+                c.checked = !defaults.has(c.dataset.cid);
+            });
+            UI.showToast('Barra restablecida a los valores de fábrica', 'success', 2500);
         });
+    },
+
+    /**
+     * Añade los botones ocultos de fábrica al conjunto guardado, una sola vez
+     * por versión de TOOLBAR_DEFAULTS_VERSION.
+     *
+     * Hace falta la versión porque `tc-hidden` solo guarda lo oculto: sin ella
+     * no se puede distinguir «nunca configurado» de «el usuario quiso verlo»,
+     * y quien ya tuviera la barra personalizada se encontraría el botón nuevo
+     * visible. Tras la migración, su elección manda para siempre.
+     */
+    _tcApplyFactoryDefaults() {
+        let stored = 0;
+        try { stored = parseInt(localStorage.getItem('tc-defaults-v') || '0', 10) || 0; }
+        catch { /* localStorage bloqueado: se aplican los defectos cada vez */ }
+        if (stored >= TOOLBAR_DEFAULTS_VERSION) return false;
+
+        const hidden = this._tcGetHidden();
+        let added = 0;
+        for (const cid of TOOLBAR_HIDDEN_BY_DEFAULT) {
+            if (!hidden.has(cid)) { hidden.add(cid); added++; }
+        }
+        this._tcSave(hidden);
+        try { localStorage.setItem('tc-defaults-v', String(TOOLBAR_DEFAULTS_VERSION)); } catch {}
+        return added > 0;
     },
 
     _tcGetHidden() {
@@ -586,7 +632,42 @@ const UI = {
     },
 
     _tcSave(set) {
-        localStorage.setItem('tc-hidden', JSON.stringify([...set]));
+        try { localStorage.setItem('tc-hidden', JSON.stringify([...set])); } catch {}
+    },
+
+    /** ¿Tiene el usuario este elemento puesto en su barra? */
+    isToolbarItemVisible(cid) {
+        return !this._tcGetHidden().has(cid);
+    },
+
+    /**
+     * Ancla un panel flotante bajo un botón de la barra.
+     *
+     * Un botón oculto por el personalizador tiene `display:none`, y entonces
+     * getBoundingClientRect() devuelve todo ceros: `right: innerWidth - 0`
+     * empujaba el panel entero fuera de la pantalla por la izquierda. Pasa de
+     * verdad — ocultá «Mediciones» y pulsá M — así que se comprueba el rect y
+     * se cae a una esquina si no sirve.
+     *
+     * @param {HTMLElement} panel
+     * @param {string[]} btnIds  botones candidatos, en orden de preferencia
+     */
+    anchorPanel(panel, btnIds) {
+        if (!panel) return;
+        for (const id of [].concat(btnIds)) {
+            const r = document.getElementById(id)?.getBoundingClientRect();
+            if (r && r.width > 0 && r.height > 0) {
+                panel.style.top   = (r.bottom + 6) + 'px';
+                panel.style.right = Math.max(4, window.innerWidth - r.right) + 'px';
+                panel.style.left  = 'auto';
+                return;
+            }
+        }
+        // Ningún ancla utilizable: esquina superior derecha, bajo la barra
+        const bar = document.getElementById('toolbar')?.getBoundingClientRect();
+        panel.style.top   = ((bar?.bottom ?? 52) + 6) + 'px';
+        panel.style.right = '8px';
+        panel.style.left  = 'auto';
     },
 
     _tcApply(hidden) {

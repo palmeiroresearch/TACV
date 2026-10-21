@@ -57,15 +57,30 @@ const DicomBridge = {
         const bitsAlloc    = u16('x00280100') || 16;
         const pixelRep     = u16('x00280103') || 0; // 0=unsigned, 1=signed
         const slope        = f('x00281053') ?? 1;
-        const intercept    = f('x00281052') ?? -1024;
+        // RescaleIntercept ausente → 0, como manda DICOM (PS3.3 C.11.1.1.2).
+        // Un default de -1024 restaría 1024 UH a todo estudio sin el tag.
+        const rawIntercept = f('x00281052');
+        const intercept    = rawIntercept ?? 0;
+        const interceptMissing = rawIntercept == null;
+        const slopeMissing     = f('x00281053') == null;
+        if (interceptMissing) {
+            console.warn('[DICOM] Falta RescaleIntercept (x00281052) —', filename,
+                '— se asume 0. Verificá las UH antes de medir.');
+        }
         const pixelSpacing = parsePixelSpacing() || [1, 1];
         if (pixelSpacing[0] === 1 && pixelSpacing[1] === 1) {
             console.warn('[DICOM] PixelSpacing no encontrado —', filename,
                 '— MPR sagital/coronal puede aparecer distorsionado.');
         }
         const imgPos       = ds('x00200032') || [0, 0, 0];
+        const imgOrient    = ds('x00200037');   // necesario para la normal del corte
         const sliceLoc     = f('x00201041') ?? (imgPos[2] || 0);
         const instanceNum  = i('x00200013') ?? 0;
+
+        // PixelPaddingValue / RangeLimit: VR es US o SS según PixelRepresentation,
+        // así que dataSet.string() no sirve — hay que leer el binario.
+        const padding      = this._paddingValue(dataSet, 'x00280120', pixelRep);
+        const paddingLimit = this._paddingValue(dataSet, 'x00280121', pixelRep);
 
         // Window sugerida por el archivo
         const wc = f('x00281050') ?? 40;
@@ -95,8 +110,11 @@ const DicomBridge = {
             pixelRepresentation: pixelRep,
             rescaleSlope:     slope,
             rescaleIntercept: intercept,
+            rescaleSlopeMissing:     slopeMissing,
+            rescaleInterceptMissing: interceptMissing,
             pixelSpacing,           // [rowSpacing, colSpacing] mm/px
             imagePosition:    imgPos,
+            imageOrientation: imgOrient,   // [rowX,rowY,rowZ, colX,colY,colZ] o null
             sliceLocation:    sliceLoc,
             sliceThickness:   f('x00180050') ?? 1,
             instanceNumber:   instanceNum,
@@ -104,6 +122,27 @@ const DicomBridge = {
             windowWidth:      ww,
             pixelData,              // Int16Array (siempre signed Int16)
             allTags,
+
+            /* ── Píxeles fuera del FOV (padding) ── */
+            pixelPaddingValue:      padding,
+            pixelPaddingRangeLimit: paddingLimit,
+
+            /* ── Identificadores y metadatos técnicos (trazabilidad) ── */
+            studyInstanceUID:  s('x0020000d') || '',
+            seriesInstanceUID: s('x0020000e') || '',
+            seriesNumber:      i('x00200011') ?? null,
+            acquisitionTime:   s('x00080032') || '',
+            acquisitionDate:   s('x00080022') || '',
+            studyTime:         s('x00080030') || '',
+            manufacturer:      s('x00080070') || '',
+            manufacturerModel: s('x00081090') || '',
+            kvp:               f('x00180060') ?? null,
+            tubeCurrent:       f('x00181151') ?? null,
+            exposure:          f('x00181152') ?? null,
+            convolutionKernel: s('x00181210') || '',
+            protocolName:      s('x00181030') || '',
+            bodyPart:          s('x00180015') || '',
+            spacingBetweenSlices: f('x00180088') ?? null,
         };
     },
 
@@ -158,6 +197,23 @@ const DicomBridge = {
         if (!str) return null;
         const parts = str.split('\\').map(Number).filter(v => !isNaN(v));
         return parts.length ? parts : null;
+    },
+
+    /* ── PixelPaddingValue / RangeLimit (US o SS según PixelRepresentation) ── */
+    // Devuelve el valor ALMACENADO, que es contra lo que hay que comparar
+    // el píxel (PS3.3 C.7.5.1.1.2). null si el tag no está.
+    _paddingValue(ds, tag, pixelRep) {
+        const el = ds.elements[tag];
+        if (!el || !el.length) return null;
+        try {
+            // Con pixelRep=1 (signed) el VR es SS; con 0 (unsigned) es US.
+            // Aun así algunos equipos escriben SS con pixelRep=0; si el valor
+            // unsigned cae en el rango alto, interpretarlo como signed da el
+            // valor correcto para el Int16Array que usamos internamente.
+            if (pixelRep === 1) return ds.int16(tag);
+            const u = ds.uint16(tag);
+            return (u > 32767) ? (u - 65536) : u;
+        } catch { return null; }
     },
 
     /* ── Header-only parse (sin pixel data) ────────── */

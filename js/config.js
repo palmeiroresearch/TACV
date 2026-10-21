@@ -1,7 +1,10 @@
 'use strict';
 
-const APP_VERSION = '1.0.0';
-const CACHE_NAME  = 'tac-viewer-v1.0.0';
+/* Versión de la app. Se sella en cada medición exportada, así que debe
+   subirse en todo despliegue: es parte de la trazabilidad del estudio.
+   Debe coincidir con CACHE_VERSION en sw.js. */
+const APP_VERSION = '1.6.1';
+const CACHE_NAME  = 'tac-viewer-v1.6.1';
 
 /* ── Windowing presets ──────────────────────────────────── */
 const WINDOWING_PRESETS = {
@@ -32,6 +35,13 @@ const TOOL_IDS = {
     TEXT:       'text',
     COBB:       'cobb',
     FREEHAND:   'freehand',
+    /* ── Investigación: NWU, volumen y efecto de masa ── */
+    NWU_MIDLINE: 'nwu_midline',   // 2 clics: inserción anterior y posterior de la hoz
+    NWU_LESION:  'nwu_lesion',    // traza la ROI de lesión → genera la espejo
+    NWU_SEPTUM:  'nwu_septum',    // 1 clic en el septum pellucidum
+    NWU_AB:      'nwu_ab',        // A y B para el ayudante ABC/2
+    /* ── Análisis automático de asimetría ── */
+    ASPECTS_SEED: 'aspects_seed', // 1 clic: sonda ASPECTS + su espejo
 };
 
 /* ── Keyboard shortcuts ─────────────────────────────────── */
@@ -49,6 +59,67 @@ const SHORTCUTS = {
     't': TOOL_IDS.TEXT,
     'c': TOOL_IDS.COBB,
     'g': TOOL_IDS.FREEHAND,
+    'l': TOOL_IDS.NWU_MIDLINE,
+    'n': TOOL_IDS.NWU_LESION,
+    'j': TOOL_IDS.NWU_SEPTUM,
+    'b': TOOL_IDS.NWU_AB,
+    'k': TOOL_IDS.ASPECTS_SEED,
+};
+
+/* ── Investigación ──────────────────────────────────────── */
+
+// Umbral de exclusión por defecto para las ROI de NWU. Editable en el panel:
+// por debajo de 0 UH se excluye LCR, por encima de 60 UH calcificación o sangre.
+const NWU_DEFAULTS = {
+    huMin: 0,
+    huMax: 60,
+};
+
+// Filtros y realces que generan o alteran valores de píxel. El modo
+// investigación los desactiva y los bloquea. La ventana/nivel NO está aquí:
+// solo cambia cómo se mapea a gris, no el valor medido.
+const RESEARCH_BLOCKED_FILTERS = [
+    'bicubicEnabled',    // interpolación bicúbica
+    'usmEnabled',        // unsharp masking
+    'bilateralEnabled',  // denoising bilateral
+    'anisoEnabled',      // difusión anisotrópica
+    'claheEnabled',      // CLAHE
+    'retinexEnabled',    // multi-scale Retinex
+    'tvEnabled',         // Total Variation denoising
+    'isSuperResEnabled', // superresolución
+];
+
+// Botones de la toolbar que hay que deshabilitar visualmente, por clave de estado
+const RESEARCH_BLOCKED_BUTTONS = {
+    tvEnabled:         'btnTV',
+    isSuperResEnabled: 'btnSuperRes',
+};
+
+/* ── Personalización de la barra ────────────────────────── */
+
+// Botones OCULTOS de fábrica. El análisis automático de asimetría es una
+// función en estudio y explícitamente no diagnóstica: no debe aparecer en la
+// barra de nadie sin que lo haya activado a propósito en «Personalizar barra».
+// Que cueste un paso es la intención, no un descuido.
+const TOOLBAR_HIDDEN_BY_DEFAULT = [
+    'btn-detector',
+    'btn-detector-panel',
+];
+
+// Se sube al cambiar TOOLBAR_HIDDEN_BY_DEFAULT. Los valores de fábrica nuevos
+// se aplican UNA vez a quien ya tenía la barra configurada —si no, un usuario
+// con `tc-hidden` guardado de antes vería el botón nuevo igualmente—; a partir
+// de ahí manda siempre su elección.
+const TOOLBAR_DEFAULTS_VERSION = 1;
+
+// Checkboxes del panel de filtros a desmarcar y bloquear
+const RESEARCH_FILTER_CHECKBOXES = {
+    bicubicEnabled:   'chkBicubic',
+    usmEnabled:       'chkUsm',
+    bilateralEnabled: 'chkBilateral',
+    anisoEnabled:     'chkAniso',
+    claheEnabled:     'chkClahe',
+    retinexEnabled:   'chkRetinex',
 };
 
 /* ── DICOM tag dictionary (para metadata panel) ─────────── */
@@ -71,6 +142,14 @@ const DICOM_TAGS = {
     'x00100020': 'Patient ID',
     'x00100030': 'Birth Date',
     'x00100040': 'Sex',
+    'x00081090': 'Manufacturer Model',
+    'x0020000d': 'Study Instance UID',
+    'x0020000e': 'Series Instance UID',
+    'x00080032': 'Acquisition Time',
+    'x00181210': 'Convolution Kernel',
+    'x00180088': 'Spacing Between Slices',
+    'x00280120': 'Pixel Padding Value',
+    'x00280121': 'Pixel Padding Range Limit',
     'x00181030': 'Protocol Name',
     'x00180050': 'Slice Thickness',
     'x00180060': 'kVp',

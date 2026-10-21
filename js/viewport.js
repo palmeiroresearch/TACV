@@ -126,6 +126,11 @@ class Viewport {
         this.state.totalSlices = totalSlices ?? this.state.totalSlices;
         this.render();
         this._updateStatusBar();
+        // El overlay del detector se genera por corte: hay que pedir el nuevo.
+        // Aquí y no en cada ruta de navegación, que son varias.
+        if (typeof Detector !== 'undefined' && this === ViewportLayout.getActive()) {
+            Detector.onSliceChanged();
+        }
     }
 
     /* ── Render principal ──────────────────────────────── */
@@ -219,7 +224,24 @@ class Viewport {
         );
     }
 
+    /* ── Guarda de modo investigación ──────────────────────
+       Un único punto de control: si el modo está activo, ningún
+       procesamiento que genere o altere valores de píxel puede
+       encenderse, ni desde la toolbar ni desde el panel de filtros
+       ni restaurando el estado de una serie visitada antes.
+       La ventana/nivel no pasa por aquí: sigue libre. */
+    _blockedByResearch(key) {
+        if (typeof ResearchMode === 'undefined' || !ResearchMode.isActive()) return false;
+        if (!RESEARCH_BLOCKED_FILTERS.includes(key)) return false;
+        if (typeof UI !== 'undefined') {
+            UI.showToast('Modo investigación activo: el procesamiento está bloqueado para ' +
+                         'preservar los valores originales', 'warning', 3500);
+        }
+        return true;
+    }
+
     toggleTV() {
+        if (this._blockedByResearch('tvEnabled')) return;
         this.state.tvEnabled = !this.state.tvEnabled;
         document.getElementById('btnTV')?.classList.toggle('on', this.state.tvEnabled);
         if (!this.state.tvEnabled) {
@@ -329,6 +351,7 @@ class Viewport {
     }
 
     toggleSuperRes() {
+        if (this._blockedByResearch('isSuperResEnabled')) return;
         this.state.isSuperResEnabled = !this.state.isSuperResEnabled;
         document.getElementById('btnSuperRes')?.classList.toggle('on', this.state.isSuperResEnabled);
         this.render();
@@ -348,11 +371,14 @@ class Viewport {
 
     // Setter genérico para cualquier campo de filtro
     setFilter(key, value) {
+        // Solo se bloquea ENCENDER: apagar un filtro siempre está permitido
+        if (value && this._blockedByResearch(key)) return;
         this.state[key] = value;
         this.render();
     }
 
     toggleFilter(key, btnId) {
+        if (!this.state[key] && this._blockedByResearch(key)) return;
         this.state[key] = !this.state[key];
         if (btnId) document.getElementById(btnId)?.classList.toggle('on', this.state[key]);
         this.render();

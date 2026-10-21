@@ -20,6 +20,10 @@ const OverlayRenderer = {
             return;
         }
 
+        // El overlay del detector va DEBAJO de todo lo demás: es un fondo
+        // sobre la imagen, no una anotación.
+        this.drawDetectorOverlay(viewport);
+
         this.drawDicomInfo(viewport);
         this.drawOrientationMarkers(viewport);
         this.drawScaleBar(viewport);
@@ -34,7 +38,14 @@ const OverlayRenderer = {
         this.drawLiveMeasurement(viewport);
         if (viewport.state.abMode) this.drawAbSplit(viewport);
         this.drawNoteIndicator(viewport);
+        this.drawResearchBadge(viewport);
     },
+
+    /* ── Formateo de UH y áreas ───────────────────────────
+       Las estadísticas se guardan con precisión completa (la NWU lo
+       exige); el redondeo ocurre aquí, al mostrarlas. */
+    _fmtHU(v, dec = 1)   { return (v == null || !Number.isFinite(v)) ? '—' : v.toFixed(dec); },
+    _fmtArea(v, dec = 1) { return (v == null || !Number.isFinite(v)) ? '—' : v.toFixed(dec); },
 
     /* ── Sincronizar tamaño overlay = canvas WebGL ──── */
     _sync(viewport) {
@@ -219,6 +230,12 @@ const OverlayRenderer = {
             case 'text':       this._drawText(viewport, m, color);      break;
             case 'cobb':       this._drawCobb(viewport, m, color);      break;
             case 'freehand':   this._drawFreehand(viewport, m, color);  break;
+            /* ── Investigación ── */
+            case 'midline':    this._drawMidline(viewport, m);          break;
+            case 'nwu_roi':    this._drawNwuRoi(viewport, m);           break;
+            case 'septum':     this._drawSeptum(viewport, m);           break;
+            case 'abc_axis':   this._drawAbcAxis(viewport, m);          break;
+            case 'aspects_probe': this._drawAspectsProbe(viewport, m);  break;
         }
     },
 
@@ -277,7 +294,9 @@ const OverlayRenderer = {
         ctx.fill(); ctx.stroke();
 
         if (m.stats) {
-            const txt = `Mean: ${m.stats.mean} HU\nStd: ${m.stats.std}\nArea: ${m.stats.area} mm²`;
+            const txt = `Mean: ${this._fmtHU(m.stats.mean)} HU\n` +
+                        `Std: ${this._fmtHU(m.stats.std)}\n` +
+                        `Area: ${this._fmtArea(m.stats.area)} mm²`;
             ctx.font = '11px Inter, sans-serif'; ctx.fillStyle = '#60c8ff';
             ctx.textAlign = 'left'; ctx.textBaseline = 'top';
             txt.split('\n').forEach((line, i) => ctx.fillText(line, c.x + rxc + 6, c.y - ryc + i * 14));
@@ -301,7 +320,9 @@ const OverlayRenderer = {
         if (m.stats) {
             ctx.font = '11px Inter, sans-serif'; ctx.fillStyle = '#60c8ff';
             ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-            [`Mean: ${m.stats.mean} HU`, `Std: ${m.stats.std}`, `Area: ${m.stats.area} mm²`]
+            [`Mean: ${this._fmtHU(m.stats.mean)} HU`,
+             `Std: ${this._fmtHU(m.stats.std)}`,
+             `Area: ${this._fmtArea(m.stats.area)} mm²`]
                 .forEach((line, i) => ctx.fillText(line, Math.max(a.x, b.x) + 6, Math.min(a.y, b.y) + i * 14));
         }
         ctx.shadowBlur = 0;
@@ -404,7 +425,9 @@ const OverlayRenderer = {
             ctx.font = '11px Inter, sans-serif'; ctx.fillStyle = '#60c8ff';
             ctx.textAlign = 'left'; ctx.textBaseline = 'top';
             ctx.shadowBlur = 2;
-            [`Mean: ${m.stats.mean} HU`, `Std: ${m.stats.std}`, `Area: ${m.stats.area} mm²`]
+            [`Mean: ${this._fmtHU(m.stats.mean)} HU`,
+             `Std: ${this._fmtHU(m.stats.std)}`,
+             `Area: ${this._fmtArea(m.stats.area)} mm²`]
                 .forEach((line, i) => ctx.fillText(line, first.x + 6, first.y + i * 14));
         }
         ctx.shadowBlur = 0;
@@ -413,6 +436,355 @@ const OverlayRenderer = {
     _drawEndpointDot(ctx, p, color) {
         ctx.fillStyle = color;
         ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+    },
+
+    /* ════════════════════════════════════════════════════════
+       Elementos de investigación
+       ════════════════════════════════════════════════════════ */
+
+    _RESEARCH_COLORS: {
+        midline:      '#00FF9D',
+        lesion:       '#FF5252',
+        mirror:       '#4FC3F7',
+        mirrorMoved:  '#FFB300',
+        septum:       '#E040FB',
+        abcAxis:      '#FFD700',
+    },
+
+    /** Línea media: inserción anterior ↔ posterior de la hoz. */
+    _drawMidline(viewport, m) {
+        const ctx = viewport.overlayCtx;
+        const a = viewport.imageToCanvas(m.anterior.x,  m.anterior.y);
+        const p = viewport.imageToCanvas(m.posterior.x, m.posterior.y);
+        const C = this._RESEARCH_COLORS.midline;
+
+        ctx.save();
+        ctx.strokeStyle = C;
+        ctx.lineWidth   = 1.5;
+        ctx.setLineDash([7, 4]);
+        ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Asas cuadradas en los extremos: señalan que son arrastrables
+        ctx.fillStyle = C;
+        [a, p].forEach(q => { ctx.fillRect(q.x - 4, q.y - 4, 8, 8); });
+
+        ctx.font = '10px Inter, sans-serif';
+        ctx.fillStyle = C;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('A', a.x, a.y - 7);
+        ctx.textBaseline = 'top';
+        ctx.fillText('P', p.x, p.y + 7);
+
+        // Marcar cuándo la línea viene de la estimación automática sin revisar
+        if (m.source === 'auto') {
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#FFB300';
+            ctx.fillText('auto — revisar', (a.x + p.x) / 2 + 8, (a.y + p.y) / 2);
+        }
+        ctx.restore();
+    },
+
+    /** ROI de NWU: lesión o espejo, con sus estadísticas. */
+    _drawNwuRoi(viewport, m) {
+        const ctx = viewport.overlayCtx;
+        if (!m.points?.length) return;
+
+        const isLesion = m.role === 'lesion';
+        const color = isLesion
+            ? this._RESEARCH_COLORS.lesion
+            : (m.adjusted ? this._RESEARCH_COLORS.mirrorMoved : this._RESEARCH_COLORS.mirror);
+
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = m.selected ? 2.5 : 1.8;
+        ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
+
+        ctx.beginPath();
+        m.points.forEach((p, i) => {
+            const c = viewport.imageToCanvas(p.x, p.y);
+            i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y);
+        });
+        ctx.closePath();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.stroke();
+
+        // Etiqueta junto al punto más alto de la ROI
+        let top = m.points[0];
+        for (const p of m.points) if (p.y < top.y) top = p;
+        const anchor = viewport.imageToCanvas(top.x, top.y);
+
+        const s = m.stats;
+        const lines = [isLesion ? 'LESIÓN' : (m.adjusted ? 'ESPEJO (ajustado)' : 'ESPEJO')];
+        if (s) {
+            lines.push(`${this._fmtHU(s.mean)} ± ${this._fmtHU(s.std)} HU`);
+            lines.push(`n=${s.count} · ${this._fmtArea(s.areaMm2)} mm²`);
+            if (s.excludedTotal > 0) lines.push(`excl. ${s.excludedTotal}`);
+        } else {
+            lines.push('sin estadísticas');
+        }
+        if (!isLesion && m.adjusted) lines.push(`Δ ${m.offsetMm.toFixed(1)} mm`);
+
+        ctx.font = '10px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = color;
+        lines.forEach((line, i) => {
+            ctx.fillText(line, anchor.x + 8, anchor.y - 4 - (lines.length - 1 - i) * 12);
+        });
+        ctx.restore();
+    },
+
+    /** Septum pellucidum y su distancia perpendicular a la línea media. */
+    _drawSeptum(viewport, m) {
+        const ctx = viewport.overlayCtx;
+        const p   = viewport.imageToCanvas(m.pos.x, m.pos.y);
+        const C   = this._RESEARCH_COLORS.septum;
+        const mid = MeasurementStore.getMidline(viewport.state.sliceIndex);
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
+
+        // Segmento perpendicular hasta la línea media, que es lo que se mide
+        if (mid) {
+            const f = viewport.state.frame;
+            const [rs, cs] = f?.pixelSpacing || [1, 1];
+            // Pie de la perpendicular, en espacio métrico
+            const ax = mid.anterior.x * cs,  ay = mid.anterior.y * rs;
+            const bx = mid.posterior.x * cs, by = mid.posterior.y * rs;
+            const px = m.pos.x * cs,         py = m.pos.y * rs;
+            const dx = bx - ax, dy = by - ay;
+            const len2 = dx * dx + dy * dy;
+            if (len2 > 0) {
+                const t = ((px - ax) * dx + (py - ay) * dy) / len2;
+                const foot = viewport.imageToCanvas((ax + t * dx) / cs, (ay + t * dy) / rs);
+                ctx.strokeStyle = C;
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(foot.x, foot.y); ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        ctx.fillStyle = C;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+
+        ctx.font = '10px Inter, sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+        const txt = (m.shiftMm == null)
+            ? 'Septum'
+            : `Desv. ${Math.abs(m.shiftMm).toFixed(1)} mm`;
+        ctx.fillText(txt, p.x + 7, p.y - 5);
+        ctx.restore();
+    },
+
+    /** Ejes A y B del ayudante ABC/2. */
+    _drawAbcAxis(viewport, m) {
+        const ctx = viewport.overlayCtx;
+        const p1  = viewport.imageToCanvas(m.p1.x, m.p1.y);
+        const p2  = viewport.imageToCanvas(m.p2.x, m.p2.y);
+        const C   = this._RESEARCH_COLORS.abcAxis;
+
+        ctx.save();
+        ctx.strokeStyle = C; ctx.lineWidth = 2;
+        ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        this._drawEndpointDot(ctx, p1, C);
+        this._drawEndpointDot(ctx, p2, C);
+
+        ctx.font = 'bold 11px Inter, sans-serif';
+        ctx.fillStyle = C;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(`${m.axis} = ${m.distanceMm.toFixed(1)} mm`,
+                     (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 5);
+        ctx.restore();
+    },
+
+    /* ════════════════════════════════════════════════════════
+       Overlay del detector automático
+       ════════════════════════════════════════════════════════ */
+
+    /**
+     * Pinta el mapa de asimetría y los contornos de los candidatos.
+     *
+     * El bitmap viene a resolución de IMAGEN y se coloca con la misma
+     * transformación afín que usa el render WebGL, derivada de tres puntos de
+     * imageToCanvas. Así queda alineado con cualquier zoom, desplazamiento,
+     * volteo y rotación sin tocar el renderer ni el pipeline de filtros —
+     * importa porque este overlay nunca debe pasar por un filtro.
+     */
+    drawDetectorOverlay(viewport) {
+        if (typeof Detector === 'undefined' || !Detector.hasResult()) return;
+        if (viewport.mprPlane && viewport.mprPlane !== 'axial') return;
+
+        const ctx = viewport.overlayCtx;
+        const z   = viewport.state.sliceIndex;
+        const bmp = Detector.getOverlayFor(z);
+        const contours = Detector.getContoursFor(z);
+        if (!bmp && !contours?.length) { this.drawDetectorBadge(viewport); return; }
+
+        // Transformación afín exacta a partir de tres puntos
+        const o = viewport.imageToCanvas(0, 0);
+        const a = viewport.imageToCanvas(1, 0);
+        const b = viewport.imageToCanvas(0, 1);
+
+        if (bmp) {
+            ctx.save();
+            ctx.globalAlpha = Detector.opacity;
+            ctx.imageSmoothingEnabled = false;
+            ctx.setTransform(a.x - o.x, a.y - o.y, b.x - o.x, b.y - o.y, o.x, o.y);
+            ctx.drawImage(bmp, 0, 0);
+            ctx.restore();
+        }
+
+        if (contours?.length) {
+            ctx.save();
+            ctx.lineJoin = 'round';
+            for (const c of contours) {
+                if (!c.contour?.length) continue;
+                const hypo = c.kind === 'hypodense';
+                ctx.strokeStyle = hypo ? '#4FC3F7' : '#FF5252';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([]);
+                ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
+                this._strokePolygon(ctx, viewport, c.contour);
+
+                // El espejo va discontinuo: es la referencia, no el hallazgo
+                if (c.mirrorContour?.length) {
+                    ctx.setLineDash([5, 4]);
+                    ctx.lineWidth = 1.2;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+                    this._strokePolygon(ctx, viewport, c.mirrorContour);
+                    ctx.setLineDash([]);
+                }
+
+                // Etiqueta en cifras, nunca en diagnóstico
+                let top = c.contour[0];
+                for (const p of c.contour) if (p.y < top.y) top = p;
+                const at = viewport.imageToCanvas(top.x, top.y);
+                const lines = [
+                    `${hypo ? 'hipodensa' : 'hiperdensa'} · ${c.volumeMl.toFixed(2)} mL`,
+                ];
+                if (c.meanHu != null) {
+                    lines.push(`${c.meanHu.toFixed(1)} UH` +
+                               (c.mirrorMeanHu != null ? ` vs ${c.mirrorMeanHu.toFixed(1)}` : ''));
+                }
+                if (c.nwu != null) lines.push(`NWU ${c.nwu.toFixed(1)} %`);
+                if (c.flags?.length) lines.push(c.flags.join(' · '));
+
+                ctx.font = '10px Inter, sans-serif';
+                ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+                ctx.fillStyle = hypo ? '#4FC3F7' : '#FF5252';
+                lines.forEach((t, i) => {
+                    ctx.fillText(t, at.x + 8, at.y - 4 - (lines.length - 1 - i) * 12);
+                });
+            }
+            ctx.restore();
+        }
+
+        this.drawDetectorBadge(viewport);
+    },
+
+    _strokePolygon(ctx, viewport, pts) {
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+            const c = viewport.imageToCanvas(p.x, p.y);
+            i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y);
+        });
+        ctx.closePath();
+        ctx.stroke();
+    },
+
+    /**
+     * Sello de análisis automático, quemado en el canvas para que cualquier
+     * PNG o informe exportado con el overlay encima lo lleve.
+     */
+    drawDetectorBadge(viewport) {
+        const ctx = viewport.overlayCtx;
+        const cw  = viewport.overlayCanvas.width;
+        const ch  = viewport.overlayCanvas.height;
+        const label = 'ANÁLISIS AUTOMÁTICO — NO DIAGNÓSTICO';
+
+        ctx.save();
+        ctx.font = 'bold 9px Inter, sans-serif';
+        const w = ctx.measureText(label).width + 16;
+        const x = (cw - w) / 2, y = ch - 58;
+
+        ctx.fillStyle = 'rgba(120, 50, 10, 0.45)';
+        ctx.fillRect(x, y, w, 16);
+        ctx.strokeStyle = 'rgba(255, 170, 70, 0.85)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 15);
+        ctx.fillStyle = '#FFCC80';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(label, cw / 2, y + 8.5);
+        ctx.restore();
+    },
+
+    /** Sonda ASPECTS: círculo, su espejo y el ΔUH. */
+    _drawAspectsProbe(viewport, m) {
+        const ctx = viewport.overlayCtx;
+        if (!m.points?.length) return;
+        const color = m.flagged ? '#FF7043' : '#80CBC4';
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = m.selected ? 2.4 : 1.6;
+        this._strokePolygon(ctx, viewport, m.points);
+
+        if (m.mirrorPoints?.length) {
+            ctx.setLineDash([4, 3]);
+            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            this._strokePolygon(ctx, viewport, m.mirrorPoints);
+            ctx.setLineDash([]);
+        }
+
+        const c = viewport.imageToCanvas(m.seed.x, m.seed.y);
+        ctx.font = '10px Inter, sans-serif';
+        ctx.fillStyle = color;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+        const lines = [m.regionLabel || 'Sonda'];
+        if (m.deltaHu != null) {
+            lines.push(`ΔUH ${m.deltaHu.toFixed(2)}` +
+                       (m.z != null ? ` · z ${m.z.toFixed(1)}` : ''));
+        }
+        lines.forEach((t, i) => ctx.fillText(t, c.x + 10, c.y - 4 - (lines.length - 1 - i) * 12));
+        ctx.restore();
+    },
+
+    /**
+     * Sello de modo investigación quemado en el overlay.
+     * Va en el canvas —no solo en el DOM— para que cualquier PNG o informe
+     * exportado desde el modo investigación lleve la marca.
+     */
+    drawResearchBadge(viewport) {
+        if (typeof ResearchMode === 'undefined' || !ResearchMode.isActive()) return;
+        const ctx = viewport.overlayCtx;
+        const cw  = viewport.overlayCanvas.width;
+
+        const label = 'INVESTIGACIÓN · SIN PROCESAMIENTO';
+        ctx.save();
+        ctx.font = 'bold 9px Inter, sans-serif';
+        const w = ctx.measureText(label).width + 16;
+        const x = (cw - w) / 2, y = 4;
+
+        ctx.fillStyle = 'rgba(0, 200, 120, 0.18)';
+        ctx.fillRect(x, y, w, 16);
+        ctx.strokeStyle = 'rgba(0, 255, 157, 0.75)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 15);
+
+        ctx.fillStyle = '#00FF9D';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(label, cw / 2, y + 8.5);
+        ctx.restore();
     },
 
     /* ── Indicador de nota clínica en overlay ───────────── */
@@ -435,6 +807,39 @@ const OverlayRenderer = {
     drawLiveMeasurement(viewport) {
         const live = viewport.state.liveMeasurement;
         if (!live) return;
+
+        // Línea media en curso: un solo segmento discontinuo
+        if (live.type === 'midline_partial') {
+            const ctx = viewport.overlayCtx;
+            const a = viewport.imageToCanvas(live.anterior.x,  live.anterior.y);
+            const p = viewport.imageToCanvas(live.posterior.x, live.posterior.y);
+            ctx.save();
+            ctx.strokeStyle = this._RESEARCH_COLORS.midline;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 3]);
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
+        // ROI de NWU en curso: contorno, sin estadísticas todavía
+        if (live.type === 'nwu_live') {
+            const ctx = viewport.overlayCtx;
+            if (!live.points?.length) return;
+            ctx.save();
+            ctx.strokeStyle = this._RESEARCH_COLORS.lesion;
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            live.points.forEach((p, i) => {
+                const c = viewport.imageToCanvas(p.x, p.y);
+                i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y);
+            });
+            ctx.closePath(); ctx.stroke();
+            ctx.restore();
+            return;
+        }
+
         if (live.type === 'cobb_partial') {
             // Dibujar línea 1 completa + línea 2 en curso
             const ctx = viewport.overlayCtx;

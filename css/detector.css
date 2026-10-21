@@ -1,0 +1,389 @@
+/* ============================================================
+   ANÁLISIS AUTOMÁTICO DE ASIMETRÍA — botón, panel y resultados.
+   ============================================================ */
+
+/* ── Botón de la toolbar ────────────────────────────────────── */
+.tool-btn.btn-detector.on {
+    background: rgba(120, 50, 10, 0.75);
+    border-color: #FFAA46;
+    color: #FFCC80;
+}
+
+/* Con el modo investigación activo el detector no funciona: se atenúa en vez
+   de ocultarse, para que quede claro que existe y por qué no está disponible. */
+body.research-mode #btnDetector,
+body.research-mode #btnDetectorPanel {
+    opacity: 0.3;
+    filter: grayscale(1);
+}
+
+/* ── Panel ──────────────────────────────────────────────────── */
+.detector-panel {
+    position: fixed;
+    z-index: 2600;
+    width: 460px;
+    max-width: calc(100vw - 16px);
+    max-height: min(80vh, 780px);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+.detector-panel.hidden { display: none; }
+
+.dp-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+}
+.dp-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dp-header-btn {
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background var(--fast), color var(--fast);
+}
+.dp-header-btn:hover { background: var(--brand-primary); color: #fff; }
+
+/* Aviso permanente: la cifra no es un diagnóstico */
+.dp-disclaimer {
+    padding: 6px 12px;
+    background: rgba(120, 50, 10, 0.3);
+    border-bottom: 1px solid rgba(255, 170, 70, 0.4);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #FFCC80;
+    text-align: center;
+    flex: 0 0 auto;
+}
+
+.dp-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 4px 0 10px;
+}
+
+.dp-section {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+.dp-section:last-child { border-bottom: none; }
+.dp-section-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brand-accent);
+    margin-bottom: 8px;
+}
+.dp-section-title .dp-dim { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+.dp-dim   { color: var(--text-tertiary); font-weight: 400; font-size: 10px; }
+.dp-empty { font-size: 11px; color: var(--text-tertiary); font-style: italic; padding: 4px 0; }
+
+/* ── Bloqueado por modo investigación ───────────────────────── */
+.dp-blocked {
+    margin: 12px;
+    padding: 14px;
+    background: rgba(6, 95, 70, 0.18);
+    border-left: 3px solid #00ff9d;
+    border-radius: 4px;
+}
+.dp-blocked-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #a7f3d0;
+    margin-bottom: 8px;
+}
+.dp-blocked p {
+    margin: 0 0 8px;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+.dp-blocked p:last-child { margin-bottom: 0; }
+
+/* ── Pasos previos ──────────────────────────────────────────── */
+.dp-step {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.dp-step > span:first-child { flex: 1 1 auto; }
+.dp-step > strong { color: var(--warning); font-weight: 600; }
+.dp-step.done > strong { color: var(--success); }
+
+.dp-hint {
+    margin-top: 7px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-tertiary);
+}
+
+/* ── Controles ──────────────────────────────────────────────── */
+.dp-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+.dp-btn {
+    padding: 4px 9px;
+    font-size: 11px;
+    font-family: inherit;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background var(--fast), color var(--fast);
+}
+.dp-btn:hover:not(:disabled) { background: var(--brand-primary); color: #fff; }
+.dp-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.dp-btn.active,
+.dp-btn.primary {
+    background: var(--brand-accent-dark);
+    border-color: var(--brand-accent);
+    color: #041e14;
+    font-weight: 700;
+}
+.dp-btn-mini {
+    padding: 2px 6px;
+    font-size: 10px;
+    font-family: inherit;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    cursor: pointer;
+}
+.dp-btn-mini:hover { background: var(--brand-primary); color: #fff; }
+
+.dp-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--text-tertiary);
+}
+.dp-slider-row input[type="range"] { flex: 1 1 auto; min-width: 0; }
+
+.dp-legend {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.dp-sw {
+    width: 22px; height: 10px;
+    border-radius: 2px;
+    flex: 0 0 auto;
+}
+.dp-sw.hypo  { background: linear-gradient(90deg, rgba(40,130,255,0.25), rgba(40,130,255,0.95)); }
+.dp-sw.hyper { background: linear-gradient(90deg, rgba(255,90,40,0.25), rgba(255,90,40,0.95)); }
+
+/* ── Candidatos ─────────────────────────────────────────────── */
+.dp-cand {
+    margin-bottom: 10px;
+    padding: 9px 10px;
+    background: var(--bg-secondary);
+    border-left: 3px solid var(--border-strong);
+    border-radius: 4px;
+}
+.dp-cand.hypo  { border-left-color: #4FC3F7; }
+.dp-cand.hyper { border-left-color: #FF5252; }
+
+.dp-cand-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.dp-cand-kind {
+    flex: 1 1 auto;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.dp-cand-vol {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--brand-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.dp-kv {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 11px;
+}
+.dp-kv > span:first-child { flex: 1 1 auto; color: var(--text-secondary); }
+.dp-kv > strong {
+    flex: 0 0 auto;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.dp-flag {
+    margin-top: 6px;
+    padding: 5px 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border-left: 2px solid var(--warning);
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #fcd34d;
+}
+
+.dp-alert {
+    margin: 8px 12px;
+    padding: 7px 10px;
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid var(--info);
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #93c5fd;
+}
+
+/* ── Tablas ─────────────────────────────────────────────────── */
+.dp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+.dp-table th {
+    text-align: left;
+    padding: 4px 5px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+}
+.dp-table td {
+    padding: 4px 5px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.dp-table tr:last-child td { border-bottom: none; }
+.dp-table tr.dp-row-flag td { color: #FFAB91; font-weight: 600; }
+
+/* ── Recuento ASPECTS ───────────────────────────────────────── */
+.dp-score {
+    margin-bottom: 8px;
+    padding: 9px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+.dp-score-main {
+    display: block;
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--brand-accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+.dp-score-sub {
+    display: block;
+    margin-top: 3px;
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+/* ── Límites declarados ─────────────────────────────────────── */
+.dp-limits ul {
+    margin: 0;
+    padding-left: 18px;
+}
+.dp-limits li {
+    font-size: 10px;
+    line-height: 1.55;
+    color: var(--text-tertiary);
+    margin-bottom: 5px;
+}
+
+@media (max-width: 599px) {
+    .detector-panel {
+        width: 100vw;
+        max-width: 100vw;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: var(--statusbar-height);
+        top: auto !important;
+        max-height: 74dvh;
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+    .dp-table { font-size: 10px; }
+    .dp-table th, .dp-table td { padding: 3px; }
+}
+
+/* ── Personalizador: marca de función en estudio ────────────── */
+.tc-item-beta { opacity: 0.9; }
+.tc-beta {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(120, 50, 10, 0.4);
+    border: 1px solid rgba(255, 170, 70, 0.5);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #FFCC80;
+    vertical-align: middle;
+}
+.tc-note {
+    margin: 6px 0 2px;
+    padding: 7px 9px;
+    background: rgba(120, 50, 10, 0.16);
+    border-left: 2px solid rgba(255, 170, 70, 0.6);
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+.tc-note strong { color: #FFCC80; }
