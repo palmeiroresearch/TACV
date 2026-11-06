@@ -499,5 +499,8 @@ const CaseLibrary = (() => {
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    return Object.freeze({ init, open, close, toggle });
+    // `rescan` es _refresh tal cual: lo que hace el botón de reindexar. Se
+    // expone para que el panel del servidor pueda hacer aparecer el caso
+    // recién descargado sin que nadie tenga que pulsar nada.
+    return Object.freeze({ init, open, close, toggle, rescan: _refresh });
 })();

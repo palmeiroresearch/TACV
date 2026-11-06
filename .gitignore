@@ -1,0 +1,25 @@
+# Dependencias y artefactos de compilación
+node_modules/
+dist/
+
+# `subir/` era el apaño de la época de subir a mano: una copia del
+# repositorio dentro del propio repositorio. Con git sobra — lo que se
+# publica es este árbol. Se deja de generar, no se versiona.
+subir/
+
+# Herramientas locales
+.claude/
+*.log
+npm-debug.log*
+
+# Windows / editores
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Nada de datos de pacientes en el repositorio, por si acaso:
+# un .dcm suelto aquí sería una filtración, y en git no se borra solo.
+*.dcm
+casos/

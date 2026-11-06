@@ -593,6 +593,12 @@ const UI = {
             // oculto por defecto lo sigue estando.
             const defaults = new Set(TOOLBAR_HIDDEN_BY_DEFAULT);
             this._tcSave(defaults);
+            // Quedan todos aplicados: si no, el próximo arranque los trataría
+            // como nuevos y los volvería a ocultar tras un cambio del usuario.
+            try {
+                localStorage.setItem('tc-defaults-applied',
+                                     JSON.stringify([...defaults]));
+            } catch {}
             this._tcApply(defaults);
             panel.querySelectorAll('input[type="checkbox"][data-cid]').forEach(c => {
                 c.checked = !defaults.has(c.dataset.cid);
@@ -602,28 +608,49 @@ const UI = {
     },
 
     /**
-     * Añade los botones ocultos de fábrica al conjunto guardado, una sola vez
-     * por versión de TOOLBAR_DEFAULTS_VERSION.
+     * Oculta cada botón nuevo que venga oculto de fábrica, UNA sola vez cada
+     * uno, y nunca más.
      *
-     * Hace falta la versión porque `tc-hidden` solo guarda lo oculto: sin ella
-     * no se puede distinguir «nunca configurado» de «el usuario quiso verlo»,
-     * y quien ya tuviera la barra personalizada se encontraría el botón nuevo
-     * visible. Tras la migración, su elección manda para siempre.
+     * Hace falta porque `tc-hidden` solo guarda lo oculto: sin registro no se
+     * puede distinguir «nunca configurado» de «el usuario quiso verlo», y
+     * quien ya tuviera la barra personalizada se encontraría el botón nuevo
+     * visible.
+     *
+     * Lo que se registra es QUÉ cid se aplicaron, no solo el número de
+     * versión. Con la versión sola, subirla para añadir un botón volvía a
+     * ocultar los anteriores, y a quien hubiera activado el detector a
+     * propósito se le desactivaba en la actualización siguiente — deshacer
+     * una elección explícita es peor que el problema que resuelve.
      */
     _tcApplyFactoryDefaults() {
-        let stored = 0;
-        try { stored = parseInt(localStorage.getItem('tc-defaults-v') || '0', 10) || 0; }
-        catch { /* localStorage bloqueado: se aplican los defectos cada vez */ }
-        if (stored >= TOOLBAR_DEFAULTS_VERSION) return false;
+        let aplicados;
+        try {
+            const crudo = localStorage.getItem('tc-defaults-applied');
+            if (crudo) {
+                aplicados = new Set(JSON.parse(crudo));
+            } else {
+                // Migración desde el registro por versión. Si ya se había
+                // aplicado la v1, sus botones NO se vuelven a tocar.
+                const v = parseInt(localStorage.getItem('tc-defaults-v') || '0', 10) || 0;
+                aplicados = new Set(v >= 1 ? ['btn-detector', 'btn-detector-panel'] : []);
+            }
+        } catch {
+            // localStorage bloqueado: sin registro no se puede saber qué quiso
+            // el usuario, así que se respeta lo que haya y no se oculta nada.
+            return false;
+        }
+
+        const nuevos = TOOLBAR_HIDDEN_BY_DEFAULT.filter(cid => !aplicados.has(cid));
+        if (!nuevos.length) return false;
 
         const hidden = this._tcGetHidden();
-        let added = 0;
-        for (const cid of TOOLBAR_HIDDEN_BY_DEFAULT) {
-            if (!hidden.has(cid)) { hidden.add(cid); added++; }
-        }
+        for (const cid of nuevos) { hidden.add(cid); aplicados.add(cid); }
         this._tcSave(hidden);
-        try { localStorage.setItem('tc-defaults-v', String(TOOLBAR_DEFAULTS_VERSION)); } catch {}
-        return added > 0;
+        try {
+            localStorage.setItem('tc-defaults-applied', JSON.stringify([...aplicados]));
+            localStorage.setItem('tc-defaults-v', String(TOOLBAR_DEFAULTS_VERSION));
+        } catch {}
+        return true;
     },
 
     _tcGetHidden() {

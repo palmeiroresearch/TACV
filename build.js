@@ -10,58 +10,41 @@ const path    = require('path');
 const ROOT = __dirname;
 const DIST = path.join(ROOT, 'dist');
 
-// Orden estricto de dependencias (igual que index.html)
-const JS_FILES = [
-    'js/capabilities.js',
-    'lib/dicom-parser.min.js',
-    'lib/pako.min.js',
-    'js/config.js',
-    'js/storage.js',
-    'js/colormap.js',
-    'js/shaders.js',
-    'js/filter-shaders.js',
-    'js/dicom-parser-bridge.js',
-    'js/dicom-loader.js',
-    'js/research-core.js',
-    'js/detect-core.js',
-    'js/measurement-store.js',
-    'js/tool-state.js',
-    'js/tools-basic.js',
-    'js/tools-measure.js',
-    'js/tools-annotate.js',
-    'js/research-mode.js',
-    'js/tools-nwu.js',
-    'js/detector.js',
-    'js/post-processor.js',
-    'js/renderer-gl.js',
-    'js/overlay-renderer.js',
-    'js/viewport.js',
-    'js/viewport-layout.js',
-    'js/series-panel.js',
-    'js/mpr-volume.js',
-    'js/mpr-viewport.js',
-    'js/series-manager.js',
-    'js/metadata-panel.js',
-    'js/measurements-panel.js',
-    'js/histogram-panel.js',
-    'js/research-panel.js',
-    'js/detector-panel.js',
-    'js/export.js',
-    'js/case-library.js',
-    'js/loupe.js',
-    'js/ui.js',
-    'js/app.js',
-];
+/* Las listas de archivos se DERIVAN de index.html, no se mantienen a mano.
+   Tenerlas duplicadas ya rompió un despliegue: se añadieron módulos al HTML,
+   nadie los añadió aquí, y dist/ quedó sin ellos — la app cargaba y moría con
+   un "no está definido" que no se parecía en nada a la causa. El HTML es la
+   única fuente del orden de carga, que además es estricto por dependencias. */
 
-const CSS_FILES = [
-    'css/main.css',
-    'css/layout.css',
-    'css/toolbar.css',
-    'css/thumbnail.css',
-    'css/panels.css',
-    'css/research.css',
-    'css/detector.css',
-];
+function leerIndex() {
+    return fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+}
+
+/** Extrae rutas locales de index.html en el orden en que aparecen. */
+function assetsDeIndex(html, re, que) {
+    const encontrados = [];
+    for (const m of html.matchAll(re)) {
+        const r = m[1];
+        if (/^(https?:|data:|#|\/\/)/.test(r)) continue;   // externo: no se empaqueta
+        if (!fs.existsSync(path.join(ROOT, r))) {
+            throw new Error(
+                `index.html referencia ${que} "${r}" que no existe en el proyecto.`);
+        }
+        encontrados.push(r);
+    }
+    if (!encontrados.length) {
+        throw new Error(`no se encontró ningún ${que} en index.html.`);
+    }
+    return encontrados;
+}
+
+const INDEX_HTML = leerIndex();
+
+const JS_FILES = assetsDeIndex(
+    INDEX_HTML, /<script\b[^>]*\bsrc="([^"]+)"/g, 'script');
+
+const CSS_FILES = assetsDeIndex(
+    INDEX_HTML, /<link\b[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+)"/g, 'hoja de estilo');
 
 async function build() {
     fs.mkdirSync(DIST, { recursive: true });

@@ -39,6 +39,10 @@
     DetectorPanel.init();
     Detector.init();
 
+    // Panel del servidor PACS. Necesita la pasarela de la app de escritorio;
+    // en la web se abre, lo explica y no hace nada más.
+    PacsPanel.init();
+
     // Case library
     CaseLibrary.init();
 

@@ -3,8 +3,8 @@
 /* Versión de la app. Se sella en cada medición exportada, así que debe
    subirse en todo despliegue: es parte de la trazabilidad del estudio.
    Debe coincidir con CACHE_VERSION en sw.js. */
-const APP_VERSION = '1.6.1';
-const CACHE_NAME  = 'tac-viewer-v1.6.1';
+const APP_VERSION = '1.7.0';
+const CACHE_NAME  = 'tac-viewer-v1.7.0';
 
 /* ── Windowing presets ──────────────────────────────────── */
 const WINDOWING_PRESETS = {
@@ -101,16 +101,22 @@ const RESEARCH_BLOCKED_BUTTONS = {
 // función en estudio y explícitamente no diagnóstica: no debe aparecer en la
 // barra de nadie sin que lo haya activado a propósito en «Personalizar barra».
 // Que cueste un paso es la intención, no un descuido.
+// El panel del servidor también va oculto, por otra razón: en la versión WEB
+// no hay pasarela DICOM detrás —un navegador no puede abrir sockets TCP ni
+// escuchar en un puerto— y el botón no haría nada. Solo tiene sentido en la
+// app de escritorio, que es la que lleva la pasarela dentro.
 const TOOLBAR_HIDDEN_BY_DEFAULT = [
     'btn-detector',
     'btn-detector-panel',
+    'btn-pacs-panel',
 ];
 
 // Se sube al cambiar TOOLBAR_HIDDEN_BY_DEFAULT. Los valores de fábrica nuevos
 // se aplican UNA vez a quien ya tenía la barra configurada —si no, un usuario
 // con `tc-hidden` guardado de antes vería el botón nuevo igualmente—; a partir
 // de ahí manda siempre su elección.
-const TOOLBAR_DEFAULTS_VERSION = 1;
+//   v2 → añade 'btn-pacs-panel'
+const TOOLBAR_DEFAULTS_VERSION = 2;
 
 // Checkboxes del panel de filtros a desmarcar y bloquear
 const RESEARCH_FILTER_CHECKBOXES = {

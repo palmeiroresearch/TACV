@@ -9,7 +9,7 @@
    - Message: SKIP_WAITING para activar update aprobado por usuario
    ============================================================ */
 
-const CACHE_VERSION = 'v1.6.1';
+const CACHE_VERSION = 'v1.7.0';
 const CACHE_NAME    = `tac-viewer-${CACHE_VERSION}`;
 
 /* ── Modo investigación: congelación de actualizaciones ──────
@@ -66,6 +66,7 @@ const ASSETS = [
     './css/panels.css',
     './css/research.css',
     './css/detector.css',
+    './css/pacs.css',
     /* ── JS — en orden de dependencias ── */
     './js/capabilities.js',
     './js/config.js',
@@ -101,6 +102,8 @@ const ASSETS = [
     './js/histogram-panel.js',
     './js/research-panel.js',
     './js/detector-panel.js',
+    './js/pacs-client.js',
+    './js/pacs-panel.js',
     './js/export.js',
     './js/tv-worker.js',
     './js/case-library.js',

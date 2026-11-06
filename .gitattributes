@@ -1,0 +1,28 @@
+# Todo el proyecto usa LF, y debe seguir usándolo en cualquier máquina.
+#
+# No es manía: una vez un script reescribió cinco archivos a CRLF y la
+# generación de dist/index.html dejó de encontrar sus marcas, el bundle
+# salió sin 34 scripts y la app cargaba para morir con un "no está
+# definido" que no se parecía en nada a la causa. Con `core.autocrlf=true`
+# —el valor por defecto de Git en Windows— eso volvería a pasar en cuanto
+# alguien clone el repositorio.
+#
+# `eol=lf` manda sobre la configuración local de quien clone.
+* text=auto eol=lf
+
+# Binarios: que Git no los toque jamás
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.dcm  binary
+*.pdf  binary
+*.zip  binary
+
+# El bundle minificado no aporta nada en un diff
+dist/* linguist-generated
+
+# Las bibliotecas de terceros no cuentan como código del proyecto
+lib/*  linguist-vendored
